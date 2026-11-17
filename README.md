@@ -9,12 +9,48 @@ M9 行动项闭环已补全：行动项状态、验证备注、跨报告列表�
 下一步：进入连续四周自用，补充人工标注集后用真实 Provider 重跑评测。
 
 ## 快速开始
-前置：Python 3.11+、uv、Docker Desktop、Git。
-```bash
-cp .env.example .env
+前置：Python 3.11+、uv、Docker Desktop、Node.js 20+、Git。
+
+首次准备：
+
+```powershell
+cd f:/work/Cairn
+copy .env.example .env
 uv sync
 docker compose up -d
+uv run alembic upgrade head
+```
+
+启动后端（终端 1）：
+
+```powershell
+cd f:/work/Cairn
+uv run uvicorn apps.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+```
+
+启动前端（终端 2）：
+
+```powershell
+cd f:/work/Cairn/apps/web
+npm install
+npm run dev
+```
+
+打开：
+
+- 前端：http://127.0.0.1:5173
+- API 文档：http://127.0.0.1:8000/docs
+- 健康检查：http://127.0.0.1:8000/api/v1/health
+
+真实模型调用前，在 `.env` 里配置至少一个 `*_API_KEY`，或在前端“设置”页添加加密凭证；不要提交 `.env`。
+
+测试：
+
+```powershell
+cd f:/work/Cairn
 uv run pytest
 ```
+
+停止服务：分别按 `Ctrl+C`；停止基础设施：`docker compose down`。
 
 > 当前 `docker-compose.yml` 将容器 5432 映射到宿主 5433（本机 5432 已被其他 PostgreSQL 占用）；若宿主 5432 空闲，可改回 `5432:5432` 并同步更新 `.env` 的 `DATABASE_URL`。
