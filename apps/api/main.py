@@ -5,6 +5,7 @@ from apps.api.auth.router import router as auth_router
 from apps.api.config import get_settings
 from apps.api.credentials.router import router as credentials_router
 from apps.api.errors import register_error_handlers
+from apps.api.extraction.router import router as extraction_router
 from apps.api.gateway.router import router as gateway_router
 from apps.api.health import router as health_router
 from apps.api.ingestion.router import router as ingestion_router
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(credentials_router)
     app.include_router(gateway_router)
     app.include_router(ingestion_router)
+    app.include_router(extraction_router)
     app.include_router(usage_router)
     register_error_handlers(app)
     return app
