@@ -19,7 +19,7 @@ if sys.platform == "win32":
 
 def _test_urls() -> tuple[str, str]:
     url = get_settings().database_url
-    async_url = url.rsplit("/", 1)[0] + "/reflectai_test"
+    async_url = url.rsplit("/", 1)[0] + "/cairn_test"
     sync_url = async_url.replace("+asyncpg", "")
     return async_url, sync_url
 
@@ -30,23 +30,23 @@ def test_engine():
     admin_sync = sync_url.rsplit("/", 1)[0] + "/postgres"
     with psycopg.connect(admin_sync, autocommit=True) as conn:
         exists = conn.execute(
-            "SELECT 1 FROM pg_database WHERE datname='reflectai_test'"
+            "SELECT 1 FROM pg_database WHERE datname='cairn_test'"
         ).fetchone()
         if not exists:
-            conn.execute("CREATE DATABASE reflectai_test")
+            conn.execute("CREATE DATABASE cairn_test")
     from alembic import command
     from alembic.config import Config
 
     cfg = Config("alembic.ini")
-    previous_db_url = os.environ.get("REFLECTAI_DB_URL")
-    os.environ["REFLECTAI_DB_URL"] = async_url
+    previous_db_url = os.environ.get("CAIRN_DB_URL")
+    os.environ["CAIRN_DB_URL"] = async_url
     try:
         command.upgrade(cfg, "head")
     finally:
         if previous_db_url is None:
-            os.environ.pop("REFLECTAI_DB_URL", None)
+            os.environ.pop("CAIRN_DB_URL", None)
         else:
-            os.environ["REFLECTAI_DB_URL"] = previous_db_url
+            os.environ["CAIRN_DB_URL"] = previous_db_url
     eng = create_async_engine(async_url, pool_pre_ping=True, poolclass=NullPool)
     yield eng
     asyncio.run(eng.dispose())

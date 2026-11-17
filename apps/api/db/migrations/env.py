@@ -18,7 +18,7 @@ if config.config_file_name is not None:
 
 config.set_main_option(
     "sqlalchemy.url",
-    os.getenv("REFLECTAI_DB_URL") or get_settings().database_url,
+    os.getenv("CAIRN_DB_URL") or get_settings().database_url,
 )
 target_metadata = Base.metadata
 

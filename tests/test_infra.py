@@ -4,7 +4,7 @@ import redis.asyncio as aioredis
 
 async def test_postgres_reachable_and_pgvector_available():
     conn = await asyncpg.connect(
-        "postgresql://reflectai:reflectai@127.0.0.1:5433/reflectai"
+        "postgresql://cairn:cairn@127.0.0.1:5433/cairn"
     )
     try:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")

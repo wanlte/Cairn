@@ -1,14 +1,14 @@
-# ReflectAI M0 骨架与基础设施 Implementation Plan
+# Cairn M0 骨架与基础设施 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 搭起 ReflectAI 的可运行地基——Docker Compose 一键起 PostgreSQL/pgvector/Redis，FastAPI 应用带配置、结构化日志、request_id 全链路、异步 DB 与迁移、JWT 鉴权、统一错误体，为后续网关与业务层提供稳定底座。
+**Goal:** 搭起 Cairn 的可运行地基——Docker Compose 一键起 PostgreSQL/pgvector/Redis，FastAPI 应用带配置、结构化日志、request_id 全链路、异步 DB 与迁移、JWT 鉴权、统一错误体，为后续网关与业务层提供稳定底座。
 
 **Architecture:** 单仓 monorepo（`apps/api` 后端，`apps/web` 前端后置）。后端 FastAPI 应用工厂 + pydantic-settings 配置 + structlog JSON 日志 + SQLAlchemy 2.0 async + Alembic 迁移。鉴权 JWT（access 2h / refresh 7d），密码 pwdlib argon2 哈希。所有表带 `user_id` 多租户就绪。测试用 compose 起的真实 PG（独立 test 库 + 事务回滚），不 mock 数据库。
 
 **Tech Stack:** Python 3.11+ · FastAPI · SQLAlchemy 2.0 (async) · asyncpg · psycopg · Alembic · PostgreSQL 16 (pgvector) · Redis 7 · pydantic-settings · structlog · PyJWT · pwdlib[argon2] · cryptography · uv · pytest · ruff · Docker Compose
 
-**Spec:** `docs/superpowers/specs/2026-11-16-reflectai-agent-layer-design.md`（agent 层设计，本计划为其地基）；上游 `AI对话复盘助手_PRD_v2.md` v2.1（M0 章节、8.2 数据原则、9.1/9.3 API 与鉴权、11 NFR、12.2 安全红线）
+**Spec:** `docs/superpowers/specs/2026-11-16-cairn-agent-layer-design.md`（agent 层设计，本计划为其地基）；上游 `AI对话复盘助手_PRD_v2.md` v2.1（M0 章节、8.2 数据原则、9.1/9.3 API 与鉴权、11 NFR、12.2 安全红线）
 
 ## Global Constraints
 
@@ -16,7 +16,7 @@
 - 后端 FastAPI + SQLAlchemy 2.0 (async) + Alembic；依赖管理 uv；lint ruff（line-length 100, target py311）；测试 pytest（asyncio_mode=auto）。
 - API 前缀 `/api/v1`；统一错误体 `{"code","message","request_id","retryable"}`；游标分页 `cursor`+`limit`；写接口支持 `Idempotency-Key` 头（本计划仅约定，后续计划落地）。
 - 鉴权 JWT：access 2h / refresh 7d；密码哈希用 pwdlib argon2，不明文存储。
-- 密钥用 `cryptography.fernet` 加密，主密钥来自环境变量 `REFLECTAI_SECRET_KEY`；**不明文落库、不出现在日志与响应中**；含密钥响应一律掩码 `sk-****abcd`（本计划先建日志过滤与配置，凭证接口在 Plan 2）。
+- 密钥用 `cryptography.fernet` 加密，主密钥来自环境变量 `CAIRN_SECRET_KEY`；**不明文落库、不出现在日志与响应中**；含密钥响应一律掩码 `sk-****abcd`（本计划先建日志过滤与配置，凭证接口在 Plan 2）。
 - 结构化日志 JSON + `request_id` 全链路；日志过滤器屏蔽 `sk-` 模式与对话原文。
 - 所有业务表带 `user_id`（多租户就绪，即便当前单用户）。
 - CORS 默认仅 `127.0.0.1`（前端 dev `http://127.0.0.1:5173`）。
@@ -102,7 +102,7 @@ apps/web/dist/
 
 ```toml
 [project]
-name = "reflectai-api"
+name = "cairn-api"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -158,9 +158,9 @@ packages = ["apps/api"]
 
 ```dotenv
 ENVIRONMENT=dev
-DATABASE_URL=postgresql+asyncpg://reflectai:reflectai@127.0.0.1:5433/reflectai
+DATABASE_URL=postgresql+asyncpg://cairn:cairn@127.0.0.1:5433/cairn
 REDIS_URL=redis://localhost:6379/0
-REFLECTAI_SECRET_KEY=change-me-to-a-long-random-secret-value
+CAIRN_SECRET_KEY=change-me-to-a-long-random-secret-value
 JWT_SECRET=change-me-jwt-secret
 JWT_ACCESS_TTL_MINUTES=120
 JWT_REFRESH_TTL_DAYS=7
@@ -174,7 +174,7 @@ from fastapi import FastAPI
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="ReflectAI API", version="0.1.0")
+    app = FastAPI(title="Cairn API", version="0.1.0")
     return app
 ```
 
@@ -189,7 +189,7 @@ from apps.api.main import create_app
 def test_create_app_returns_fastapi():
     app = create_app()
     assert isinstance(app, FastAPI)
-    assert app.title == "ReflectAI API"
+    assert app.title == "Cairn API"
 ```
 
 - [ ] **Step 7: 安装依赖并跑测试验证通过**
@@ -204,7 +204,7 @@ Expected: PASS（1 passed）。若 uv 未安装，先按 astral.sh/uv 安装。
 - [ ] **Step 8: 写 README 启动 stub**
 
 ````markdown
-# ReflectAI
+# Cairn
 
 多平台 AI 对话复盘与成长档案系统（个人开源项目）。
 
@@ -239,7 +239,7 @@ git commit -m "chore: scaffold repo, deps, app factory and smoke test"
 
 **Interfaces:**
 - Consumes: `.env.example`（Task 1）的 DATABASE_URL/REDIS_URL 默认值。
-- Produces: 运行中的 postgres（库 `reflectai`，用户/密码 `reflectai`，宿主机端口 5433 映射容器 5432，含 pgvector 扩展）与 redis（端口 6379）；后续所有 DB 测试依赖 `docker compose up -d`。若宿主 5432 空闲，也可改回 `5432:5432` 并同步连接串。
+- Produces: 运行中的 postgres（库 `cairn`，用户/密码 `cairn`，宿主机端口 5433 映射容器 5432，含 pgvector 扩展）与 redis（端口 6379）；后续所有 DB 测试依赖 `docker compose up -d`。若宿主 5432 空闲，也可改回 `5432:5432` 并同步连接串。
 
 - [ ] **Step 1: 写 `docker-compose.yml`**
 
@@ -248,13 +248,13 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: reflectai
-      POSTGRES_PASSWORD: reflectai
-      POSTGRES_DB: reflectai
+      POSTGRES_USER: cairn
+      POSTGRES_PASSWORD: cairn
+      POSTGRES_DB: cairn
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U reflectai"]
+      test: ["CMD-SHELL", "pg_isready -U cairn"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -292,7 +292,7 @@ import redis.asyncio as aioredis
 
 async def test_postgres_reachable_and_pgvector_available():
     conn = await asyncpg.connect(
-        "postgresql://reflectai:reflectai@127.0.0.1:5433/reflectai"
+        "postgresql://cairn:cairn@127.0.0.1:5433/cairn"
     )
     try:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
@@ -333,7 +333,7 @@ git commit -m "feat: docker compose postgres(pgvector)+redis with connectivity t
 **Interfaces:**
 - Consumes: `create_app`（Task 1）。
 - Produces:
-  - `apps.api.config.get_settings() -> Settings`（lru_cache 单例）；`Settings` 字段：`environment, database_url, redis_url, reflectai_secret_key, jwt_secret, jwt_access_ttl_minutes, jwt_refresh_ttl_days, cors_origins`。
+  - `apps.api.config.get_settings() -> Settings`（lru_cache 单例）；`Settings` 字段：`environment, database_url, redis_url, cairn_secret_key, jwt_secret, jwt_access_ttl_minutes, jwt_refresh_ttl_days, cors_origins`。
   - `apps.api.logging.setup_logging() -> None`；`apps.api.logging.request_id_var: ContextVar[str]`；`get_logger()`。
   - `apps.api.middleware.RequestIdMiddleware`（每请求生成 uuid4，写 contextvar，响应头 `X-Request-ID`）。
   - `apps.api.errors.AppError(code: str, message: str, status_code: int = 400, retryable: bool = False)`；`apps.api.errors.register_error_handlers(app) -> None`（本 Task 仅装 AppError 处理器；校验/未捕获处理器在 Task 6 补齐）。
@@ -353,9 +353,9 @@ class Settings(BaseSettings):
     )
 
     environment: str = "dev"
-    database_url: str = "postgresql+asyncpg://reflectai:reflectai@127.0.0.1:5433/reflectai"
+    database_url: str = "postgresql+asyncpg://cairn:cairn@127.0.0.1:5433/cairn"
     redis_url: str = "redis://localhost:6379/0"
-    reflectai_secret_key: str = "dev-insecure-change-me"
+    cairn_secret_key: str = "dev-insecure-change-me"
     jwt_secret: str = "dev-jwt-insecure-change-me"
     jwt_access_ttl_minutes: int = 120
     jwt_refresh_ttl_days: int = 7
@@ -539,7 +539,7 @@ from apps.api.middleware import RequestIdMiddleware
 def create_app() -> FastAPI:
     setup_logging()
     settings = get_settings()
-    app = FastAPI(title="ReflectAI API", version="0.1.0")
+    app = FastAPI(title="Cairn API", version="0.1.0")
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -578,7 +578,7 @@ git commit -m "feat: settings, structlog logging, request_id middleware, AppErro
 - Produces:
   - `apps.api.db.base.Base`（DeclarativeBase）；`engine`（AsyncEngine）；`SessionLocal`（async_sessionmaker）；`async get_session() -> AsyncIterator[AsyncSession]`（FastAPI 依赖）。
   - `apps.api.db.models.user.User`：`id: int`(BIGSERIAL PK), `email: str`(unique), `password_hash: str`, `created_at: datetime`。
-  - `tests/conftest.py` fixtures：`test_engine`（session 级，独立 `reflectai_test` 库 + alembic upgrade）、`db_session`（每测试事务回滚）、`client`（ASGITransport + 覆盖 get_session）。
+  - `tests/conftest.py` fixtures：`test_engine`（session 级，独立 `cairn_test` 库 + alembic upgrade）、`db_session`（每测试事务回滚）、`client`（ASGITransport + 覆盖 get_session）。
 
 - [ ] **Step 1: 写 DB 基座 `apps/api/db/base.py`**
 
@@ -648,7 +648,7 @@ uv run alembic init apps/api/db/migrations
 然后整文件替换 `alembic.ini` 中 `script_location` 与 `sqlalchemy.url` 两行：
 ```ini
 script_location = apps/api/db/migrations
-sqlalchemy.url = postgresql+psycopg://reflectai:reflectai@127.0.0.1:5433/reflectai
+sqlalchemy.url = postgresql+psycopg://cairn:cairn@127.0.0.1:5433/cairn
 ```
 
 - [ ] **Step 5: 写异步迁移环境 `apps/api/db/migrations/env.py`（整文件替换）**
@@ -674,7 +674,7 @@ if config.config_file_name is not None:
 
 config.set_main_option(
     "sqlalchemy.url",
-    os.getenv("REFLECTAI_DB_URL") or get_settings().database_url,
+    os.getenv("CAIRN_DB_URL") or get_settings().database_url,
 )
 target_metadata = Base.metadata
 
@@ -752,7 +752,7 @@ if sys.platform == "win32":
 
 def _test_urls() -> tuple[str, str]:
     url = get_settings().database_url
-    async_url = url.rsplit("/", 1)[0] + "/reflectai_test"
+    async_url = url.rsplit("/", 1)[0] + "/cairn_test"
     sync_url = async_url.replace("+asyncpg", "")
     return async_url, sync_url
 
@@ -763,23 +763,23 @@ def test_engine():
     admin_sync = sync_url.rsplit("/", 1)[0] + "/postgres"
     with psycopg.connect(admin_sync, autocommit=True) as conn:
         exists = conn.execute(
-            "SELECT 1 FROM pg_database WHERE datname='reflectai_test'"
+            "SELECT 1 FROM pg_database WHERE datname='cairn_test'"
         ).fetchone()
         if not exists:
-            conn.execute("CREATE DATABASE reflectai_test")
+            conn.execute("CREATE DATABASE cairn_test")
     from alembic import command
     from alembic.config import Config
 
     cfg = Config("alembic.ini")
-    previous_db_url = os.environ.get("REFLECTAI_DB_URL")
-    os.environ["REFLECTAI_DB_URL"] = async_url
+    previous_db_url = os.environ.get("CAIRN_DB_URL")
+    os.environ["CAIRN_DB_URL"] = async_url
     try:
         command.upgrade(cfg, "head")
     finally:
         if previous_db_url is None:
-            os.environ.pop("REFLECTAI_DB_URL", None)
+            os.environ.pop("CAIRN_DB_URL", None)
         else:
-            os.environ["REFLECTAI_DB_URL"] = previous_db_url
+            os.environ["CAIRN_DB_URL"] = previous_db_url
     eng = create_async_engine(async_url, pool_pre_ping=True, poolclass=NullPool)
     yield eng
     asyncio.run(eng.dispose())
@@ -1369,3 +1369,6 @@ git commit -m "test: M0 skeleton acceptance and README progress"
 - Windows 下 asyncpg 在默认 `ProactorEventLoop` 上连接被重置，`tests/conftest.py` 与迁移 `env.py` 均设置 `WindowsSelectorEventLoopPolicy`；测试引擎使用 `NullPool`，避免 session 级引擎跨函数级事件循环复用连接。
 - 依赖解析到较新版本（pytest-asyncio 1.5 / SQLAlchemy 2.1 / ruff 0.17），因此增加 `asyncio_default_fixture_loop_scope = "function"` 与 `ruff.lint.ignore = ["B008"]`，并把 `datetime.now(timezone.utc)` 改为 `datetime.now(UTC)`。
 - 验收结果：`pytest` 14 passed，`ruff check .` 无错误，真实 uvicorn 冒烟返回 200 且响应头含 `X-Request-ID`。
+- 项目正式命名为 **Cairn**：旧 ReflectAI 标识已全量替换，包名 `cairn-api`，环境变量 `CAIRN_SECRET_KEY` / `CAIRN_DB_URL`，数据库角色/库/测试库改为 `cairn` / `cairn_test`，plan 与 spec 文件名同步。
+- 项目目录从 `f:/work/new` 迁到 `f:/work/Cairn`，compose 项目名随之变为 `cairn` 并创建独立卷 `cairn_pgdata`；旧 `new_pgdata` 卷不再使用。
+- 目录迁移后 `uv run` 报 trampoline 路径错误，`uv sync` 正常；验收改用 `.venv\Scripts\python.exe -m pytest` / `-m ruff` / `-m alembic` 执行。

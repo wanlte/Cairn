@@ -1,9 +1,9 @@
-# ReflectAI · AI 对话复盘与成长档案系统
+# Cairn · AI 对话复盘与成长档案系统
 ## 产品需求文档 v2.0
 
 | 项目 | 内容 |
 |---|---|
-| 产品代号 | ReflectAI |
+| 产品代号 | Cairn |
 | 文档版本 | **v2.1**（v2.0 评审结论修订：砍平台套餐、MD 统一摄入、工期校准、State 枚举化） |
 | 撰写日期 | 2026-11-16 |
 | 文档状态 | 待开发评审 |
@@ -614,7 +614,7 @@ CREATE INDEX ON llm_call_log (request_id);
 ### 9.3 鉴权方案
 
 - 自托管单用户模式：启动生成默认账号 + `JWT`（access 2h / refresh 7d）
-- 密钥用 `cryptography.fernet` 加密，主密钥来自环境变量 `REFLECTAI_SECRET_KEY`，**不明文落库、不出现在日志与响应中**
+- 密钥用 `cryptography.fernet` 加密，主密钥来自环境变量 `CAIRN_SECRET_KEY`，**不明文落库、不出现在日志与响应中**
 - 所有含密钥字段的响应一律掩码：`sk-****abcd`
 
 ---
@@ -684,7 +684,7 @@ CREATE TABLE profile_schema (
 ### 12.1 仓库结构
 
 ```
-reflectai/
+cairn/
 ├── apps/api/            # FastAPI 后端
 │   ├── gateway/         # 模型网关（providers/ capabilities/ router/ ratelimit/ metering/）
 │   ├── ingestion/       # collectors/ normalizer/
@@ -816,7 +816,7 @@ v1.0 的叙事是"AI 应用创新"。**针对后端转 AI，主线要换**：
 
 ### 16.2 简历项目条目（3 行版，数字需替换为实测）
 
-> **ReflectAI · 多平台 AI 对话复盘与成长档案系统**（个人开源项目 · 2026.11–2026.12 | Python/FastAPI + Vue3 + PostgreSQL/pgvector + Redis）
+> **Cairn · 多平台 AI 对话复盘与成长档案系统**（个人开源项目 · 2026.11–2026.12 | Python/FastAPI + Vue3 + PostgreSQL/pgvector + Redis）
 > - 设计**多模型网关**：统一 4 类 Provider 适配，实现能力探测、四级结构化输出降级链、令牌桶限流与熔断；分级模型路由使周成本降至 ¥0.6，较全量强模型方案节省约 85%
 > - 设计**采集器/归一化器双层摄入管道**，以 Markdown 为统一交换格式收敛官方存档 / 分享链接 / 任意平台导出三类异构输入，新增平台零改动下游；内容指纹去重 + 用户纠错闭环，解析成功率 96%
 > - 以 Fragment 为唯一事实源驱动复盘与画像双引擎；**枚举强制判断 + 证据约束**解决 LLM 谄媚问题，判断一致率 72%；画像 Schema 作为动态数据编译进结构化输出约束，支持用户反馈后免发版增删维度

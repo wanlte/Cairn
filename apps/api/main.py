@@ -12,7 +12,7 @@ from apps.api.middleware import RequestIdMiddleware
 def create_app() -> FastAPI:
     setup_logging()
     settings = get_settings()
-    app = FastAPI(title="ReflectAI API", version="0.1.0")
+    app = FastAPI(title="Cairn API", version="0.1.0")
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
