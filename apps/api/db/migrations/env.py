@@ -9,8 +9,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from apps.api.config import get_settings
-from apps.api.db.base import Base
 from apps.api.db import models  # noqa: F401  确保模型注册
+from apps.api.db.base import Base
 
 config = context.config
 if config.config_file_name is not None:
