@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from pwdlib import PasswordHash
@@ -22,7 +22,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def _create_token(user_id: int, token_type: str, expires: timedelta) -> str:
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {"sub": str(user_id), "type": token_type, "iat": now, "exp": now + expires}
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
