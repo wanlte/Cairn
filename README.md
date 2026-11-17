@@ -18,14 +18,16 @@ cd f:/work/Cairn
 copy .env.example .env
 uv sync
 docker compose up -d
-uv run alembic upgrade head
+.venv/Scripts/python.exe -m alembic upgrade head
 ```
+
+> Windows 上 `uv run pytest` / `uv run uvicorn` 可能触发 `uv trampoline failed to canonicalize script path`。这是 uv 的 console-script launcher 问题，不影响项目；请统一用上面的 `.venv/Scripts/python.exe -m ...` 方式。macOS/Linux 把路径换成 `.venv/bin/python`。
 
 启动后端（终端 1）：
 
 ```powershell
 cd f:/work/Cairn
-uv run uvicorn apps.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+.venv/Scripts/python.exe -m uvicorn apps.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
 ```
 
 启动前端（终端 2）：
@@ -48,7 +50,7 @@ npm run dev
 
 ```powershell
 cd f:/work/Cairn
-uv run pytest
+.venv/Scripts/python.exe -m pytest
 ```
 
 停止服务：分别按 `Ctrl+C`；停止基础设施：`docker compose down`。
