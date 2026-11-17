@@ -12,6 +12,7 @@ from apps.api.ingestion.router import router as ingestion_router
 from apps.api.logging import setup_logging
 from apps.api.middleware import RequestIdMiddleware
 from apps.api.profile.router import router as profile_router
+from apps.api.retrieval.router import router as retrieval_router
 from apps.api.review.router import router as review_router
 from apps.api.usage.router import router as usage_router
 
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(extraction_router)
     app.include_router(review_router)
     app.include_router(profile_router)
+    app.include_router(retrieval_router)
     app.include_router(usage_router)
     register_error_handlers(app)
     return app

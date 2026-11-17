@@ -37,6 +37,13 @@ class BaseProvider(ABC):
     def normalize_error(self, exc: Exception) -> UnifiedError:
         raise NotImplementedError
 
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        raise UnifiedError(
+            GatewayErrorCode.SERVER_ERROR,
+            f"{self.name.value} 不支持 embedding",
+            retryable=False,
+        )
+
 
 class OpenAICompatProvider(BaseProvider):
     name = ProviderName.OPENAI_COMPAT
@@ -191,6 +198,25 @@ class OpenAICompatProvider(BaseProvider):
             latency_ms=int((time.perf_counter() - started) * 1000),
             raw_response_snippet=redact_snippet(content),
         )
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        settings = get_settings()
+        models = {
+            ProviderName.DEEPSEEK: settings.deepseek_embedding_model,
+            ProviderName.VOLCENGINE: settings.volcengine_embedding_model,
+            ProviderName.HUNYUAN: settings.hunyuan_embedding_model,
+            ProviderName.OPENAI_COMPAT: settings.openai_compat_embedding_model,
+        }
+        try:
+            response = await self._client.embeddings.create(
+                model=models[self.name],
+                input=texts,
+            )
+        except Exception as exc:
+            raise self.normalize_error(exc) from exc
+        return [[float(value) for value in item.embedding] for item in response.data]
 
 
 class DeepSeekProvider(OpenAICompatProvider):

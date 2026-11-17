@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -53,6 +54,12 @@ class Fragment(Base):
         UniqueConstraint("user_id", "content_hash", name="uq_fragment_user_hash"),
         Index("ix_fragment_user_kind", "user_id", "kind"),
         Index("ix_fragment_run", "run_id"),
+        Index(
+            "ix_fragment_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -68,6 +75,7 @@ class Fragment(Base):
     )
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

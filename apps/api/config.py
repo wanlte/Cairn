@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     openai_compat_base_url: str | None = None
     openai_compat_model: str | None = None
 
+    deepseek_embedding_model: str = "deepseek-embedding"
+    volcengine_embedding_model: str = "doubao-embedding-text-240715"
+    hunyuan_embedding_model: str = "hunyuan-embedding"
+    openai_compat_embedding_model: str = "text-embedding-3-small"
+    embedding_dim: int = 1536
+
     gateway_qps: int = 5
     gateway_concurrency: int = 20
     gateway_connect_timeout: float = 5.0
