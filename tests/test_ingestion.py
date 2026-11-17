@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import zipfile
-from pathlib import Path
 
 from apps.api.ingestion.schemas import IngestPreviewRequest, SourceType
 from apps.api.ingestion.service import IngestionService
-
-SAMPLES = Path(__file__).resolve().parents[1] / "samples"
 
 
 async def auth_headers(client, email: str) -> dict[str, str]:
@@ -24,7 +22,20 @@ async def auth_headers(client, email: str) -> dict[str, str]:
 
 
 def qoder_sample() -> str:
-    return (SAMPLES / "打造高收益项目_2026-11-17_13-14.md").read_text(encoding="utf-8")
+    parts = [
+        "# 打造高收益项目",
+        "**Exported:** 2026-11-17T05:14:56.049Z",
+        "---",
+    ]
+    for index in range(20):
+        parts.extend(
+            [
+                f"### **You**\n第 {index + 1} 个问题？",
+                f"### **Assistant**\n第 {index + 1} 个回答。",
+                "#### Thinking\n这些内部推理不应进入助手正文。",
+            ]
+        )
+    return "\n\n".join(parts)
 
 
 def deepseek_zip_base64() -> str:
@@ -38,8 +49,6 @@ def deepseek_zip_base64() -> str:
             ],
         }
     ]
-    import json
-
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("conversation.json", json.dumps(payload, ensure_ascii=False))
     return base64.b64encode(buffer.getvalue()).decode("ascii")
@@ -68,13 +77,18 @@ def test_markdown_sample_snapshot_parses_turns_and_excludes_thinking():
 def test_link_only_samples_are_marked_as_unusable():
     service = IngestionService()
 
-    for name in ("豆包示例.txt", "元宝示例.txt", "deepseek示例.txt"):
+    links = (
+        "https://www.doubao.com/thread/example",
+        "https://yb.tencent.com/s/example",
+        "https://chat.deepseek.com/share/example",
+    )
+    for link in links:
         preview = service.preview(
             1,
             IngestPreviewRequest(
                 source_type=SourceType.TEXT,
-                text=(SAMPLES / name).read_text(encoding="utf-8"),
-                filename=name,
+                text=link,
+                filename="share-link.txt",
             ),
         )
         assert preview.total_turns == 0
