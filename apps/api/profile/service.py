@@ -111,9 +111,7 @@ class ProfileService:
         gateway, _credential_id, model, provider = await build_gateway_for_user(
             session,
             user_id,
-            credential_id=request.credential_id,
-            provider=request.provider,
-            model=request.model,
+            **request.gateway_kwargs(),
         )
         snapshot = ProfileSnapshot(
             user_id=user_id,
@@ -153,6 +151,8 @@ class ProfileService:
                 for item in rejected
             ],
         }
+        if request.supplement:
+            payload["supplement"] = request.supplement
         gateway_request = GatewayRequest(
             task="profile",
             messages=[

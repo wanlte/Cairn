@@ -109,9 +109,7 @@ class EvaluationService:
         gateway, _credential_id, _model, _provider = await build_gateway_for_user(
             session,
             user_id,
-            credential_id=request.credential_id,
-            provider=request.provider,
-            model=request.model,
+            **request.gateway_kwargs(),
         )
         prompt = EXTRACTION_PROMPT.read_text(encoding="utf-8")
         correct_fields = 0

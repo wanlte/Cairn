@@ -38,3 +38,21 @@ class CapabilityView(BaseModel):
     qps: int
     concurrency: int
     probed: bool
+
+
+class QuickSavedCredential(BaseModel):
+    id: int
+    name: str
+    model: str | None = None
+
+
+class QuickModelOption(BaseModel):
+    provider: str
+    label: str
+    model: str | None = None
+    from_environment: bool = False
+    saved: list[QuickSavedCredential] = Field(default_factory=list)
+
+
+class QuickModelOptionsResponse(BaseModel):
+    options: list[QuickModelOption] = Field(default_factory=list)

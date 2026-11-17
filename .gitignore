@@ -14,3 +14,7 @@ apps/web/dist/
 # 本地样例与演示数据（含真实对话/分享链接，不入库）
 samples/
 scripts/gateway_demo.py
+
+# 工具生成目录
+.codebuddy/
+.playwright-cli/

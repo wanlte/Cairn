@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from apps.api.gateway.schemas import ProviderName
+from apps.api.gateway.credential_selection import CredentialSelection
 from apps.api.review.schemas import Verdict
 
 
@@ -16,10 +16,8 @@ class RetrievalFilters(BaseModel):
     verdict: Verdict | None = None
 
 
-class RetrievalCredentials(BaseModel):
-    credential_id: int | None = None
-    provider: ProviderName | None = None
-    model: str | None = None
+class RetrievalCredentials(CredentialSelection):
+    pass
 
 
 class RetrievalIndexRequest(RetrievalCredentials):

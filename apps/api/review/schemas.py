@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from apps.api.gateway.schemas import ProviderName
+from apps.api.gateway.credential_selection import CredentialSelection
 
 
 class Verdict(str, Enum):
@@ -231,14 +231,13 @@ REVIEW_JSON_SCHEMA: dict[str, Any] = {
 }
 
 
-class ReviewCreateRequest(BaseModel):
+class ReviewCreateRequest(CredentialSelection):
     period: str = Field(min_length=1, max_length=32)
-    credential_id: int | None = None
-    provider: ProviderName | None = None
-    model: str | None = None
     conversation_id: int | None = None
     max_fragments: int = Field(default=200, ge=1, le=1000)
     idempotency_key: str | None = None
+    direction: str | None = Field(default=None, max_length=32)
+    supplement: str | None = Field(default=None, max_length=2000)
 
 
 class ReviewFeedbackRequest(BaseModel):

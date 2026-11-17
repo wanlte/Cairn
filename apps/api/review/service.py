@@ -90,9 +90,7 @@ class ReviewService:
         gateway, _credential_id, model, provider = await build_gateway_for_user(
             session,
             user_id,
-            credential_id=request.credential_id,
-            provider=request.provider,
-            model=request.model,
+            **request.gateway_kwargs(),
         )
 
         report = ReviewReport(
@@ -113,16 +111,21 @@ class ReviewService:
             {"id": item.id, "kind": item.kind, "payload": item.payload_json}
             for item in fragments
         ]
+        user_payload: dict[str, Any] = {
+            "period": request.period,
+            "fragments": fragment_payload,
+        }
+        if request.direction:
+            user_payload["direction"] = request.direction
+        if request.supplement:
+            user_payload["supplement"] = request.supplement
         gateway_request = GatewayRequest(
             task="review",
             messages=[
                 {"role": "system", "content": _load_prompt()},
                 {
                     "role": "user",
-                    "content": json.dumps(
-                        {"period": request.period, "fragments": fragment_payload},
-                        ensure_ascii=False,
-                    ),
+                    "content": json.dumps(user_payload, ensure_ascii=False),
                 },
             ],
             options=GatewayOptions(

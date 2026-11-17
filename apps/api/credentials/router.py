@@ -10,6 +10,9 @@ from apps.api.credentials.schemas import (
     CapabilityView,
     CredentialCreate,
     CredentialResponse,
+    QuickModelOption,
+    QuickModelOptionsResponse,
+    QuickSavedCredential,
 )
 from apps.api.db.base import get_session
 from apps.api.db.models.user import User
@@ -63,6 +66,46 @@ def _capability_view(provider: ProviderName, capabilities) -> CapabilityView:
         concurrency=capabilities.concurrency,
         probed=capabilities.probed,
     )
+
+
+@router.get("/quick-options", response_model=QuickModelOptionsResponse)
+async def quick_model_options(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> QuickModelOptionsResponse:
+    """只返回友好名称与本机配置是否可用，绝不返回密钥或掩码。"""
+    from apps.api.gateway.factory import env_credential
+
+    labels = {
+        ProviderName.DEEPSEEK: "深度求索",
+        ProviderName.VOLCENGINE: "火山引擎",
+        ProviderName.HUNYUAN: "腾讯混元",
+        ProviderName.OPENAI_COMPAT: "兼容接口",
+    }
+    saved = await credential_service.list_credentials(session, current_user.id)
+    options: list[QuickModelOption] = []
+    for provider, label in labels.items():
+        from_environment = False
+        try:
+            _key, _base, env_model = env_credential(provider)
+            from_environment = bool(_key)
+        except AppError:
+            env_model = None
+        provider_saved = [
+            QuickSavedCredential(id=item.id, name=item.name, model=item.model)
+            for item in saved
+            if item.provider == provider.value
+        ]
+        options.append(
+            QuickModelOption(
+                provider=provider.value,
+                label=label,
+                model=env_model,
+                from_environment=from_environment,
+                saved=provider_saved,
+            )
+        )
+    return QuickModelOptionsResponse(options=options)
 
 
 @router.get("", response_model=list[CredentialResponse])

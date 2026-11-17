@@ -185,3 +185,81 @@ export interface UsageRow {
   completion_tokens: number
   cost_cny: number
 }
+
+export type ProviderLabel = '深度求索' | '火山引擎' | '腾讯混元' | '兼容接口'
+export type CredentialMode = '本机配置' | '已保存凭证' | '临时使用'
+export type AgentRoleLabel = '整理师' | '复盘师' | '画像师' | '问答教练' | '审核员'
+export type DirectionKey = 'weekly' | 'project' | 'conversation' | 'growth' | 'free'
+
+export interface ModelSelection {
+  providerLabel: ProviderLabel
+  provider: string
+  credentialMode: CredentialMode
+  credentialId: number | null
+  model: string | null
+  temporaryKey: string | null
+}
+
+export interface UploadFileState {
+  uid: string
+  name: string
+  size: number
+  stage: '等待中' | '读取中' | '识别中' | '已完成' | '需要检查'
+  message: string
+  error?: string
+  content?: string
+}
+
+export interface ConversationMessage {
+  id: string
+  role: '用户' | '助手' | AgentRoleLabel
+  text: string
+  createdAt: string
+  kind?: 'text' | 'result'
+  result?: AgentResult
+}
+
+export interface AgentBubble {
+  id: string
+  role: AgentRoleLabel
+  message: string
+  state: '进行中' | '完成' | '需要确认'
+}
+
+export interface AgentResult {
+  kind: '复盘' | '画像' | '问答' | '整理'
+  title: string
+  summary: string
+  suggestions: string[]
+  nextLabel?: string
+}
+
+export type TaskStage = '等待中' | '处理中' | '请确认' | '已完成' | '遇到问题'
+
+export interface WorkspaceTask {
+  taskId: string
+  stage: TaskStage
+  direction: DirectionKey
+  message: string
+  recommendReason?: string
+}
+
+export interface DirectionOption {
+  key: DirectionKey
+  label: string
+  description: string
+}
+
+export interface QuickSavedCredential {
+  id: number
+  name: string
+  model: string | null
+}
+
+export interface QuickModelOption {
+  provider: string
+  label: ProviderLabel
+  model: string | null
+  fromEnvironment: boolean
+  saved: QuickSavedCredential[]
+}

@@ -16,6 +16,7 @@ from apps.api.profile.router import router as profile_router
 from apps.api.retrieval.router import router as retrieval_router
 from apps.api.review.router import router as review_router
 from apps.api.usage.router import router as usage_router
+from apps.api.workspace.router import router as workspace_router
 
 
 def create_app() -> FastAPI:
@@ -41,5 +42,6 @@ def create_app() -> FastAPI:
     app.include_router(retrieval_router)
     app.include_router(evaluation_router)
     app.include_router(usage_router)
+    app.include_router(workspace_router)
     register_error_handlers(app)
     return app

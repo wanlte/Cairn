@@ -1,4 +1,12 @@
-import type { ApiErrorBody } from '../types'
+import type {
+  AgentBubble,
+  AgentResult,
+  ApiErrorBody,
+  DirectionKey,
+  ModelSelection,
+  QuickModelOption,
+  TaskStage,
+} from '../types'
 
 const BASE = '/api/v1'
 
@@ -102,4 +110,54 @@ export const api = {
       }
     }
   },
+}
+
+export interface WorkspaceFilePayload {
+  name: string
+  size: number
+  content: string
+}
+
+export interface WorkspaceTaskPayload {
+  message: string
+  direction: DirectionKey
+  customDirection?: string
+  files: WorkspaceFilePayload[]
+  model: ModelSelection
+}
+
+export interface WorkspaceEvent {
+  stage: TaskStage
+  bubble?: AgentBubble
+  message?: string
+  result?: AgentResult
+  confirmPrompt?: string
+}
+
+export interface WorkspaceTaskResponse {
+  task_id: string
+  stage: string
+  recommend_reason?: string | null
+  confirm_prompt?: string | null
+}
+
+export interface WorkspaceConfirmBody {
+  confirmed: boolean
+  note?: string
+  model: ModelSelection
+}
+
+export const workspaceApi = {
+  quickModels: () => api.get<{ options: QuickModelOption[] }>('/credentials/quick-options'),
+
+  createTask: (payload: WorkspaceTaskPayload) =>
+    api.post<WorkspaceTaskResponse>('/workspace/tasks', payload),
+
+  task: (taskId: string) => api.get<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}`),
+
+  events: (taskId: string, onEvent: (data: WorkspaceEvent) => void) =>
+    api.stream(`/workspace/tasks/${taskId}/events`, onEvent),
+
+  confirm: (taskId: string, body: WorkspaceConfirmBody) =>
+    api.post<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}/confirm`, body),
 }

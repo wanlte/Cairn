@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from apps.api.gateway.schemas import ProviderName
+from apps.api.gateway.credential_selection import CredentialSelection
 
 
-class EvaluationRunRequest(BaseModel):
-    provider: ProviderName | None = None
-    credential_id: int | None = None
-    model: str | None = None
+class EvaluationRunRequest(CredentialSelection):
     limit: int | None = Field(default=None, ge=1, le=100)
     dataset: str | None = None
 

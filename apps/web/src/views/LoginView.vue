@@ -2,11 +2,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { auth } from '../stores/auth'
-import { ApiError } from '../api/client'
+import { friendlyError } from '../utils/friendly'
 
 const router = useRouter()
-const email = ref('local@cairn.dev')
-const password = ref('password123')
+const email = ref('')
+const password = ref('')
 const error = ref('')
 const busy = ref(false)
 
@@ -15,9 +15,9 @@ async function submit(): Promise<void> {
   error.value = ''
   try {
     await auth.login(email.value, password.value)
-    router.push('/import')
-  } catch (err) {
-    error.value = err instanceof ApiError ? err.body?.message || err.message : '登录失败'
+    router.push('/')
+  } catch {
+    error.value = friendlyError(new Error('unauthorized'))
   } finally {
     busy.value = false
   }
@@ -26,9 +26,8 @@ async function submit(): Promise<void> {
 
 <template>
   <div class="login-card">
-    <p class="eyebrow">CAIRN · LOCAL WORKSPACE</p>
     <h1>欢迎回来</h1>
-    <p>把散落在各平台的 AI 对话，变成可追溯的成长档案。</p>
+    <p>把散落在各平台的对话，变成看得见的成长记录。</p>
 
     <form @submit.prevent="submit" style="margin-top: 26px">
       <div class="field">
@@ -46,7 +45,7 @@ async function submit(): Promise<void> {
     </form>
 
     <div class="tip" style="margin-top: 20px">
-      首次输入任意邮箱和密码即可注册；数据保存在本机 PostgreSQL。
+      第一次输入邮箱和密码就会为你建好账号，直接进来就好。
     </div>
   </div>
 </template>

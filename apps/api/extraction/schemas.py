@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from apps.api.gateway.schemas import ProviderName
+from apps.api.gateway.credential_selection import CredentialSelection
 
 
 class FragmentKind(str, Enum):
@@ -152,11 +152,8 @@ FRAGMENT_JSON_SCHEMA: dict[str, Any] = {
 }
 
 
-class ExtractionCreateRequest(BaseModel):
+class ExtractionCreateRequest(CredentialSelection):
     conversation_id: int
-    credential_id: int | None = None
-    provider: ProviderName | None = None
-    model: str | None = None
     max_turns: int | None = Field(default=None, ge=1, le=500)
     idempotency_key: str | None = None
 

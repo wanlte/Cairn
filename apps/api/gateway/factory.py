@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.config import get_settings
@@ -45,6 +46,26 @@ def env_credential(provider: ProviderName) -> tuple[str, str | None, str | None]
     return api_key, base_url, model
 
 
+def _temporary_provider(
+    *,
+    temporary_api_key: SecretStr,
+    provider: ProviderName | None,
+    temporary_base_url: str | None,
+    model: str | None,
+):
+    """用临时密钥构造一次性 Provider。密钥只在此处解密，绝不落库或写日志。"""
+    api_key = temporary_api_key.get_secret_value()
+    if not api_key:
+        raise AppError("TEMP_KEY_EMPTY", "临时密钥不能为空", 400, retryable=False)
+    resolved_provider = provider or ProviderName.OPENAI_COMPAT
+    return build_provider(
+        provider=resolved_provider,
+        api_key=api_key,
+        base_url=temporary_base_url,
+        model=model,
+    )
+
+
 async def build_gateway_for_user(
     session: AsyncSession,
     user_id: int,
@@ -52,7 +73,20 @@ async def build_gateway_for_user(
     credential_id: int | None = None,
     provider: ProviderName | None = None,
     model: str | None = None,
+    temporary_api_key: SecretStr | None = None,
+    temporary_base_url: str | None = None,
 ) -> tuple[ModelGateway, int | None, str | None, ProviderName | None]:
+    """凭证优先级固定为：临时密钥 > 已保存凭证 > 本机配置。"""
+    if temporary_api_key is not None:
+        gateway_provider = _temporary_provider(
+            temporary_api_key=temporary_api_key,
+            provider=provider,
+            temporary_base_url=temporary_base_url,
+            model=model,
+        )
+        resolved = provider or ProviderName.OPENAI_COMPAT
+        return ModelGateway([gateway_provider]), None, model, resolved
+
     if credential_id is not None:
         credentials = await credential_service.list_credentials(session, user_id)
         primary = await credential_service.get_credential(session, user_id, credential_id)
@@ -89,7 +123,7 @@ async def build_gateway_for_user(
 
     raise AppError(
         "CREDENTIAL_REQUIRED",
-        "请提供 credential_id 或 provider（使用本地环境变量凭证）",
+        "请提供凭证或启用本机配置",
         400,
         retryable=False,
     )

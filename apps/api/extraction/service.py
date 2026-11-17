@@ -94,9 +94,7 @@ class ExtractionService:
         gateway, _credential_id, model, provider = await build_gateway_for_user(
             session,
             user_id,
-            credential_id=request.credential_id,
-            provider=request.provider,
-            model=request.model,
+            **request.gateway_kwargs(),
         )
 
         run = ExtractionRun(
