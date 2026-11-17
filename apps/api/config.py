@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     openai_compat_embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 1536
 
+    eval_extraction_accuracy_threshold: float = 0.8
+    eval_review_consistency_threshold: float = 0.7
+    eval_retrieval_recall_threshold: float = 0.75
+
     gateway_qps: int = 5
     gateway_concurrency: int = 20
     gateway_connect_timeout: float = 5.0

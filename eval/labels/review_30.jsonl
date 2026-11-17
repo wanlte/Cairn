@@ -1,0 +1,30 @@
+{"id": "rev-001", "fragment_key": "游标分页", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-002", "fragment_key": "JWT 刷新令牌", "expected_verdict": "CORRECT"}
+{"id": "rev-003", "fragment_key": "pgvector HNSW", "expected_verdict": "CORRECT"}
+{"id": "rev-004", "fragment_key": "幂等键", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-005", "fragment_key": "结构化输出", "expected_verdict": "CORRECT"}
+{"id": "rev-006", "fragment_key": "游标分页", "expected_verdict": "CORRECT"}
+{"id": "rev-007", "fragment_key": "JWT 刷新令牌", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-008", "fragment_key": "pgvector HNSW", "expected_verdict": "CORRECT"}
+{"id": "rev-009", "fragment_key": "幂等键", "expected_verdict": "CORRECT"}
+{"id": "rev-010", "fragment_key": "结构化输出", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-011", "fragment_key": "游标分页", "expected_verdict": "CORRECT"}
+{"id": "rev-012", "fragment_key": "JWT 刷新令牌", "expected_verdict": "CORRECT"}
+{"id": "rev-013", "fragment_key": "pgvector HNSW", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-014", "fragment_key": "幂等键", "expected_verdict": "CORRECT"}
+{"id": "rev-015", "fragment_key": "结构化输出", "expected_verdict": "CORRECT"}
+{"id": "rev-016", "fragment_key": "游标分页", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-017", "fragment_key": "JWT 刷新令牌", "expected_verdict": "CORRECT"}
+{"id": "rev-018", "fragment_key": "pgvector HNSW", "expected_verdict": "CORRECT"}
+{"id": "rev-019", "fragment_key": "幂等键", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-020", "fragment_key": "结构化输出", "expected_verdict": "CORRECT"}
+{"id": "rev-021", "fragment_key": "游标分页", "expected_verdict": "CORRECT"}
+{"id": "rev-022", "fragment_key": "JWT 刷新令牌", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-023", "fragment_key": "pgvector HNSW", "expected_verdict": "CORRECT"}
+{"id": "rev-024", "fragment_key": "幂等键", "expected_verdict": "CORRECT"}
+{"id": "rev-025", "fragment_key": "结构化输出", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-026", "fragment_key": "游标分页", "expected_verdict": "CORRECT"}
+{"id": "rev-027", "fragment_key": "JWT 刷新令牌", "expected_verdict": "CORRECT"}
+{"id": "rev-028", "fragment_key": "pgvector HNSW", "expected_verdict": "UNVERIFIED"}
+{"id": "rev-029", "fragment_key": "幂等键", "expected_verdict": "CORRECT"}
+{"id": "rev-030", "fragment_key": "结构化输出", "expected_verdict": "CORRECT"}

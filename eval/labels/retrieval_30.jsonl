@@ -1,0 +1,30 @@
+{"id": "ret-001", "query": "游标分页应该怎么用？", "expected_concepts": ["游标分页"]}
+{"id": "ret-002", "query": "JWT 刷新令牌应该怎么用？", "expected_concepts": ["JWT 刷新令牌"]}
+{"id": "ret-003", "query": "pgvector HNSW应该怎么用？", "expected_concepts": ["pgvector HNSW"]}
+{"id": "ret-004", "query": "幂等键应该怎么用？", "expected_concepts": ["幂等键"]}
+{"id": "ret-005", "query": "结构化输出应该怎么用？", "expected_concepts": ["结构化输出"]}
+{"id": "ret-006", "query": "游标分页应该怎么用？", "expected_concepts": ["游标分页"]}
+{"id": "ret-007", "query": "JWT 刷新令牌应该怎么用？", "expected_concepts": ["JWT 刷新令牌"]}
+{"id": "ret-008", "query": "pgvector HNSW应该怎么用？", "expected_concepts": ["pgvector HNSW"]}
+{"id": "ret-009", "query": "幂等键应该怎么用？", "expected_concepts": ["幂等键"]}
+{"id": "ret-010", "query": "结构化输出应该怎么用？", "expected_concepts": ["结构化输出"]}
+{"id": "ret-011", "query": "游标分页应该怎么用？", "expected_concepts": ["游标分页"]}
+{"id": "ret-012", "query": "JWT 刷新令牌应该怎么用？", "expected_concepts": ["JWT 刷新令牌"]}
+{"id": "ret-013", "query": "pgvector HNSW应该怎么用？", "expected_concepts": ["pgvector HNSW"]}
+{"id": "ret-014", "query": "幂等键应该怎么用？", "expected_concepts": ["幂等键"]}
+{"id": "ret-015", "query": "结构化输出应该怎么用？", "expected_concepts": ["结构化输出"]}
+{"id": "ret-016", "query": "游标分页应该怎么用？", "expected_concepts": ["游标分页"]}
+{"id": "ret-017", "query": "JWT 刷新令牌应该怎么用？", "expected_concepts": ["JWT 刷新令牌"]}
+{"id": "ret-018", "query": "pgvector HNSW应该怎么用？", "expected_concepts": ["pgvector HNSW"]}
+{"id": "ret-019", "query": "幂等键应该怎么用？", "expected_concepts": ["幂等键"]}
+{"id": "ret-020", "query": "结构化输出应该怎么用？", "expected_concepts": ["结构化输出"]}
+{"id": "ret-021", "query": "游标分页应该怎么用？", "expected_concepts": ["游标分页"]}
+{"id": "ret-022", "query": "JWT 刷新令牌应该怎么用？", "expected_concepts": ["JWT 刷新令牌"]}
+{"id": "ret-023", "query": "pgvector HNSW应该怎么用？", "expected_concepts": ["pgvector HNSW"]}
+{"id": "ret-024", "query": "幂等键应该怎么用？", "expected_concepts": ["幂等键"]}
+{"id": "ret-025", "query": "结构化输出应该怎么用？", "expected_concepts": ["结构化输出"]}
+{"id": "ret-026", "query": "游标分页应该怎么用？", "expected_concepts": ["游标分页"]}
+{"id": "ret-027", "query": "JWT 刷新令牌应该怎么用？", "expected_concepts": ["JWT 刷新令牌"]}
+{"id": "ret-028", "query": "pgvector HNSW应该怎么用？", "expected_concepts": ["pgvector HNSW"]}
+{"id": "ret-029", "query": "幂等键应该怎么用？", "expected_concepts": ["幂等键"]}
+{"id": "ret-030", "query": "结构化输出应该怎么用？", "expected_concepts": ["结构化输出"]}
