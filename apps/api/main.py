@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from apps.api.auth.router import router as auth_router
 from apps.api.config import get_settings
 from apps.api.errors import register_error_handlers
 from apps.api.health import router as health_router
@@ -21,5 +22,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(health_router)
+    app.include_router(auth_router)
     register_error_handlers(app)
     return app

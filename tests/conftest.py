@@ -7,6 +7,7 @@ import psycopg
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from apps.api.config import get_settings
 from apps.api.db.base import get_session
@@ -46,7 +47,7 @@ def test_engine():
             os.environ.pop("REFLECTAI_DB_URL", None)
         else:
             os.environ["REFLECTAI_DB_URL"] = previous_db_url
-    eng = create_async_engine(async_url, pool_pre_ping=True)
+    eng = create_async_engine(async_url, pool_pre_ping=True, poolclass=NullPool)
     yield eng
     asyncio.run(eng.dispose())
 
