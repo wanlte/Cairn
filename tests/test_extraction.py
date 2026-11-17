@@ -134,6 +134,32 @@ async def test_extraction_idempotency_key_returns_same_run(client, monkeypatch):
     assert len(provider.requests) == 1
 
 
+async def test_extraction_stream_emits_run_status(client, monkeypatch):
+    headers = await auth_headers(client, "extract-stream@x.com")
+    conversation_id = await create_conversation(
+        client, headers, "## 用户\nq\n## 助手\na"
+    )
+    patch_factory(
+        monkeypatch,
+        FakeProvider(outcomes=[fake_response(json.dumps(VALID_OUTPUT, ensure_ascii=False))]),
+    )
+    created = await client.post(
+        "/api/v1/extraction/runs",
+        json={"conversation_id": conversation_id, "provider": "deepseek"},
+        headers=headers,
+    )
+
+    async with client.stream(
+        "GET",
+        f"/api/v1/extraction/runs/{created.json()['id']}/stream",
+        headers=headers,
+    ) as response:
+        assert response.status_code == 200
+        body = await response.aread()
+
+    assert b"DONE" in body
+
+
 async def test_invalid_output_marks_run_failed_without_silent_drop(client, monkeypatch):
     headers = await auth_headers(client, "extract-c@x.com")
     conversation_id = await create_conversation(
