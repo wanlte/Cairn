@@ -1,5 +1,4 @@
 import asyncpg
-import pytest
 import redis.asyncio as aioredis
 
 
