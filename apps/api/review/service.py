@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,9 @@ from apps.api.gateway.schemas import (
 )
 from apps.api.review.schemas import (
     REVIEW_JSON_SCHEMA,
+    ActionItemResponse,
+    ActionItemStatus,
+    ActionItemVerifyRequest,
     ReviewCreateRequest,
     ReviewFeedbackRequest,
     ReviewItemResponse,
@@ -220,6 +224,22 @@ class ReviewService:
             item.evidence_fragment_ids = valid(item.evidence_fragment_ids)
         return output
 
+    @staticmethod
+    def _action_to_response(
+        action: ActionItem, report: ReviewReport | None = None
+    ) -> ActionItemResponse:
+        return ActionItemResponse(
+            id=action.id,
+            report_id=action.report_id,
+            period=report.period if report else None,
+            content=action.content,
+            verification=action.verification,
+            status=ActionItemStatus(action.status or "PENDING"),
+            verification_note=action.verification_note,
+            evidence_fragment_ids=action.evidence_fragment_ids,
+            verified_at=action.verified_at,
+        )
+
     async def _to_response(
         self, session: AsyncSession, report: ReviewReport
     ) -> ReviewReportResponse:
@@ -262,14 +282,7 @@ class ReviewService:
                 for item in items
             ],
             action_items=[
-                {
-                    "id": action.id,
-                    "content": action.content,
-                    "verification": action.verification,
-                    "evidence_fragment_ids": action.evidence_fragment_ids,
-                    "verified_at": action.verified_at,
-                }
-                for action in actions
+                self._action_to_response(action, report) for action in actions
             ],
         )
 
@@ -321,6 +334,125 @@ class ReviewService:
             payload=item.payload_json,
             feedback=item.feedback_json,
         )
+
+    async def list_action_items(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        *,
+        status: ActionItemStatus | None = None,
+        limit: int = 100,
+    ) -> list[ActionItemResponse]:
+        stmt = select(ActionItem, ReviewReport).join(
+            ReviewReport, ActionItem.report_id == ReviewReport.id
+        )
+        stmt = stmt.where(ActionItem.user_id == user_id)
+        if status:
+            stmt = stmt.where(ActionItem.status == status.value)
+        rows = (
+            await session.execute(
+                stmt.order_by(ActionItem.id.desc()).limit(limit)
+            )
+        ).all()
+        return [self._action_to_response(action, report) for action, report in rows]
+
+    async def _set_action_status(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        action_id: int,
+        *,
+        status: ActionItemStatus,
+        request: ActionItemVerifyRequest,
+    ) -> ActionItemResponse:
+        action = await session.get(ActionItem, action_id)
+        if not action or action.user_id != user_id:
+            raise AppError("ACTION_ITEM_NOT_FOUND", "行动项不存在", 404)
+        action.status = status.value
+        action.verification_note = request.note
+        action.verified_at = (
+            datetime.now(UTC) if status == ActionItemStatus.VERIFIED else None
+        )
+        await session.flush()
+        report = await session.get(ReviewReport, action.report_id)
+        return self._action_to_response(action, report)
+
+    async def verify_action_item(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        action_id: int,
+        request: ActionItemVerifyRequest,
+    ) -> ActionItemResponse:
+        return await self._set_action_status(
+            session,
+            user_id,
+            action_id,
+            status=ActionItemStatus.VERIFIED,
+            request=request,
+        )
+
+    async def reopen_action_item(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        action_id: int,
+        request: ActionItemVerifyRequest,
+    ) -> ActionItemResponse:
+        return await self._set_action_status(
+            session,
+            user_id,
+            action_id,
+            status=ActionItemStatus.REOPENED,
+            request=request,
+        )
+
+    async def export_report_markdown(
+        self, session: AsyncSession, user_id: int, report_id: int
+    ) -> str:
+        report = await self.get_report(session, user_id, report_id)
+        lines = [
+            f"# Cairn 周复盘 · {report.period}",
+            "",
+            f"模型：{report.provider or '-'} / {report.model or '-'}",
+            f"提示词版本：{report.prompt_version}",
+            "",
+            "## 概览",
+            json.dumps(report.overview, ensure_ascii=False, indent=2),
+            "",
+            "## 关键事件",
+        ]
+        for item in report.items:
+            if item.section != "key_event":
+                continue
+            lines.append(
+                f"- #{item.fragment_id} {item.payload.get('background', '')}"
+            )
+        lines.extend(["", "## 对错判断"])
+        for item in report.items:
+            if item.section != "judgment":
+                continue
+            evidence = ", ".join(str(value) for value in item.evidence_fragment_ids)
+            lines.append(
+                f"- **{item.verdict}** · {item.attribution or '-'} · "
+                f"{item.payload.get('reason', '')}（证据 #{evidence}）"
+            )
+        lines.extend(["", "## 认知变化"])
+        for item in report.items:
+            if item.section != "cognitive_change":
+                continue
+            lines.append(
+                f"- {item.payload.get('old_belief', '')} → {item.payload.get('new_belief', '')}"
+            )
+        lines.extend(["", "## 行动项"])
+        for action in report.action_items:
+            lines.append(
+                f"- [{ 'x' if action.status == ActionItemStatus.VERIFIED else ' ' }] "
+                f"{action.content}｜验证：{action.verification}"
+            )
+            if action.verification_note:
+                lines.append(f"  - 验证备注：{action.verification_note}")
+        return "\n".join(lines) + "\n"
 
 
 review_service = ReviewService()

@@ -77,6 +77,19 @@ async function removeClaim(claim: ProfileClaim): Promise<void> {
   await load()
 }
 
+async function exportSnapshot(): Promise<void> {
+  if (!current.value) return
+  const markdown = await api.getText(
+    `/profile/snapshot/export?period=${encodeURIComponent(current.value.period)}`,
+  )
+  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `cairn-profile-${current.value.period}.md`
+  link.click()
+  URL.revokeObjectURL(link.href)
+}
+
 async function loadDiff(): Promise<void> {
   if (!fromPeriod.value || !toPeriod.value) return
   diff.value = await api.get<ProfileDiff>(
@@ -115,9 +128,12 @@ async function loadDiff(): Promise<void> {
             <h2>当前画像 · {{ current.period }}</h2>
             <p>{{ current.prompt_version }} · {{ current.claims.length }} 条结论</p>
           </div>
-          <button class="btn soft small" @click="edit = { group: 'cognitive_style', key: '', value: '' }">
-            新增结论
-          </button>
+          <div class="row">
+            <button class="btn ghost small" @click="exportSnapshot">导出 MD</button>
+            <button class="btn soft small" @click="edit = { group: 'cognitive_style', key: '', value: '' }">
+              新增结论
+            </button>
+          </div>
         </div>
 
         <div v-if="edit" class="card" style="box-shadow: none; background: #f8fafc">

@@ -77,6 +77,18 @@ export interface ReviewItem {
   feedback: Record<string, unknown> | null
 }
 
+export interface ActionItemRecord {
+  id: number
+  report_id: number
+  period: string | null
+  content: string
+  verification: string
+  status: 'PENDING' | 'VERIFIED' | 'REOPENED'
+  verification_note: string | null
+  evidence_fragment_ids: number[]
+  verified_at: string | null
+}
+
 export interface ReviewReport {
   id: number
   period: string
@@ -88,7 +100,7 @@ export interface ReviewReport {
   error_code: string | null
   created_at: string
   items: ReviewItem[]
-  action_items: Array<Record<string, unknown>>
+  action_items: ActionItemRecord[]
 }
 
 export interface ProfileClaim {

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth.deps import get_current_user
 from apps.api.db.base import get_session
 from apps.api.db.models.user import User
 from apps.api.review.schemas import (
+    ActionItemResponse,
+    ActionItemStatus,
+    ActionItemVerifyRequest,
     ReviewCreateRequest,
     ReviewFeedbackRequest,
     ReviewItemResponse,
@@ -35,6 +39,57 @@ async def list_reviews(
     current_user: User = Depends(get_current_user),
 ) -> list[ReviewReportResponse]:
     return await review_service.list_reports(session, current_user.id, limit)
+
+
+@router.get("/action-items", response_model=list[ActionItemResponse])
+async def list_action_items(
+    status: ActionItemStatus | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[ActionItemResponse]:
+    return await review_service.list_action_items(
+        session, current_user.id, status=status, limit=limit
+    )
+
+
+@router.post("/action-items/{action_id}/verify", response_model=ActionItemResponse)
+async def verify_action_item(
+    action_id: int,
+    payload: ActionItemVerifyRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> ActionItemResponse:
+    result = await review_service.verify_action_item(
+        session, current_user.id, action_id, payload
+    )
+    await session.commit()
+    return result
+
+
+@router.post("/action-items/{action_id}/reopen", response_model=ActionItemResponse)
+async def reopen_action_item(
+    action_id: int,
+    payload: ActionItemVerifyRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> ActionItemResponse:
+    result = await review_service.reopen_action_item(
+        session, current_user.id, action_id, payload
+    )
+    await session.commit()
+    return result
+
+
+@router.get("/{report_id}/export", response_class=PlainTextResponse)
+async def export_review(
+    report_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> str:
+    return await review_service.export_report_markdown(
+        session, current_user.id, report_id
+    )
 
 
 @router.get("/{report_id}", response_model=ReviewReportResponse)

@@ -457,5 +457,33 @@ class ProfileService:
             changed=changed,
         )
 
+    async def export_markdown(
+        self, session: AsyncSession, user_id: int, period: str
+    ) -> str:
+        snapshot = await self.get_by_period(session, user_id, period)
+        lines = [
+            f"# Cairn 成长画像 · {snapshot.period}",
+            "",
+            f"模型：{snapshot.provider or '-'} / {snapshot.model or '-'}",
+            f"提示词版本：{snapshot.prompt_version}",
+            f"上一快照：#{snapshot.previous_snapshot_id or '-'}",
+            "",
+        ]
+        groups: dict[str, list] = {}
+        for claim in snapshot.claims:
+            groups.setdefault(claim.group.value, []).append(claim)
+        for group, claims in groups.items():
+            lines.extend([f"## {group}", ""])
+            for claim in claims:
+                evidence = ", ".join(
+                    str(value) for value in claim.evidence_fragment_ids
+                )
+                marker = "用户修正" if claim.user_corrected else claim.source.value
+                lines.append(
+                    f"- **{claim.key}**：{claim.value}（{marker}；证据 #{evidence}）"
+                )
+            lines.append("")
+        return "\n".join(lines).rstrip() + "\n"
+
 
 profile_service = ProfileService()

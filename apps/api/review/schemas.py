@@ -257,12 +257,26 @@ class ReviewItemResponse(BaseModel):
     feedback: dict | None = None
 
 
+class ActionItemStatus(str, Enum):
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REOPENED = "REOPENED"
+
+
 class ActionItemResponse(BaseModel):
     id: int
+    report_id: int
+    period: str | None = None
     content: str
     verification: str
+    status: ActionItemStatus = ActionItemStatus.PENDING
+    verification_note: str | None = None
     evidence_fragment_ids: list[int]
     verified_at: datetime | None = None
+
+
+class ActionItemVerifyRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class ReviewReportResponse(BaseModel):

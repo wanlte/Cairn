@@ -52,6 +52,16 @@ async function request<T>(
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
+  getText: async (path: string): Promise<string> => {
+    const response = await fetch(`${BASE}${path}`, {
+      headers: { ...authHeaders() },
+    })
+    if (!response.ok) {
+      const payload = await parseBody(response)
+      throw new ApiError(response.status, payload as ApiErrorBody | null)
+    }
+    return response.text()
+  },
   post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
     request<T>('POST', path, body, headers),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),

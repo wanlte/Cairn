@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth.deps import get_current_user
@@ -53,6 +54,15 @@ async def get_snapshot_by_period(
     current_user: User = Depends(get_current_user),
 ) -> ProfileSnapshotResponse:
     return await profile_service.get_by_period(session, current_user.id, period)
+
+
+@router.get("/snapshot/export", response_class=PlainTextResponse)
+async def export_snapshot(
+    period: str,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> str:
+    return await profile_service.export_markdown(session, current_user.id, period)
 
 
 @router.get("/diff", response_model=ProfileDiffResponse)

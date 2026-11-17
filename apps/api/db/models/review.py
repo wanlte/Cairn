@@ -81,6 +81,8 @@ class ActionItem(Base):
     evidence_fragment_ids: Mapped[list[Any]] = mapped_column(
         JSON, default=list, nullable=False
     )
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", nullable=False)
+    verification_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
