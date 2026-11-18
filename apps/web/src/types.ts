@@ -215,7 +215,8 @@ export interface ConversationMessage {
   role: '用户' | '助手' | AgentRoleLabel
   text: string
   createdAt: string
-  kind?: 'text' | 'result'
+  kind?: 'text' | 'result' | 'file'
+  fileUids?: string[]
   result?: AgentResult
 }
 

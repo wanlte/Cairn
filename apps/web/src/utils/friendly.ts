@@ -90,3 +90,9 @@ export function friendlyFileError(): string {
 export function friendlyFileSizeError(): string {
   return '这个文件有点大，换一个小一点的试试'
 }
+
+export function fileSizeText(size: number): string {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}

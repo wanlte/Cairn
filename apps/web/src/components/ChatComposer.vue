@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ArrowUp, Sparkles } from 'lucide-vue-next'
+import FileDropzone from './FileDropzone.vue'
 import { workspace } from '../stores/workspace'
 
 const input = computed({
@@ -41,7 +42,10 @@ function onKeydown(event: KeyboardEvent): void {
       />
     </div>
     <div class="flex items-center justify-between px-4 pb-3 pt-1">
-      <span class="pl-11 text-[12px] text-[#9aa2b4]">回车发送 · Shift 换行</span>
+      <div class="flex items-center gap-3 pl-1">
+        <FileDropzone />
+        <span class="text-[12px] text-[#9aa2b4]">回车发送 · Shift 换行</span>
+      </div>
       <button
         type="button"
         class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-light text-white shadow-glow transition-all duration-200 hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"

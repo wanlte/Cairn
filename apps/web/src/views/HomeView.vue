@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { AlertCircle, CheckCircle2, Info, MessagesSquare } from 'lucide-vue-next'
+import { AlertCircle, CheckCircle2, FileText, Info, LoaderCircle, MessagesSquare, Paperclip, Trash2 } from 'lucide-vue-next'
 import ChatComposer from '../components/ChatComposer.vue'
-import FileDropzone from '../components/FileDropzone.vue'
 import DirectionPicker from '../components/DirectionPicker.vue'
 import TaskProgress from '../components/TaskProgress.vue'
 import ResultCard from '../components/ResultCard.vue'
 import { workspace } from '../stores/workspace'
-import { friendlyStageMessage } from '../utils/friendly'
+import { fileSizeText, friendlyStageMessage } from '../utils/friendly'
+import type { UploadFileState } from '../types'
 
 onMounted(() => {
   workspace.loadQuickModels()
@@ -16,6 +16,12 @@ onMounted(() => {
 const noticeIcon = computed(() =>
   workspace.state.noticeKind === 'error' ? AlertCircle : workspace.state.noticeKind === 'success' ? CheckCircle2 : Info,
 )
+
+function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
+  return (message.fileUids || [])
+    .map((uid) => workspace.state.files.find((file) => file.uid === uid))
+    .filter((file): file is UploadFileState => Boolean(file))
+}
 </script>
 
 <template>
@@ -42,6 +48,43 @@ const noticeIcon = computed(() =>
           :class="message.role === '用户' ? 'justify-end' : 'justify-start'"
         >
           <div
+            v-if="message.kind === 'file'"
+            class="w-full max-w-[92%] rounded-[18px] rounded-br-md border border-white/80 bg-white/90 p-3 shadow-sm sm:max-w-[80%]"
+          >
+            <p class="mb-2 flex items-center gap-1.5 px-1 text-[12px] font-medium text-[#8b93a7]">
+              <Paperclip :size="13" /> 带上了 {{ filesOfMessage(message).length }} 份文件
+            </p>
+            <div class="space-y-1.5">
+              <div
+                v-for="file in filesOfMessage(message)"
+                :key="file.uid"
+                class="flex items-center gap-2.5 rounded-[12px] bg-[#f8fafc] px-3 py-2"
+              >
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  :class="file.error ? 'bg-red-50 text-[#b42318]' : 'bg-brand/10 text-brand'">
+                  <FileText :size="16" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-[13px] font-medium text-ink">{{ file.name }}</p>
+                  <p class="mt-0.5 flex items-center gap-1 text-[11px] text-[#8b93a7]">
+                    <LoaderCircle v-if="file.stage === '读取中' || file.stage === '识别中'" :size="11" class="animate-spin" />
+                    <CheckCircle2 v-else-if="file.stage === '已完成'" :size="11" class="text-[#0f766e]" />
+                    {{ fileSizeText(file.size) }} · {{ file.message }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[#9aa2b4] transition-colors hover:bg-red-50 hover:text-[#b42318]"
+                  aria-label="移除文件"
+                  @click="workspace.removeFile(file.uid)"
+                >
+                  <Trash2 :size="14" />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div
+            v-else-if="message.text"
             class="max-w-[85%] rounded-[18px] px-4 py-3 text-[14px] leading-relaxed shadow-sm"
             :class="message.role === '用户'
               ? 'rounded-br-md bg-gradient-to-br from-brand to-brand-light text-white'
@@ -56,10 +99,7 @@ const noticeIcon = computed(() =>
         <ChatComposer />
       </div>
 
-      <div class="mt-5 grid w-full gap-4 animate-fade-up sm:grid-cols-2" style="animation-delay: .12s">
-        <div class="rounded-[20px] border border-white/80 bg-white/70 p-5 shadow-soft backdrop-blur-sm">
-          <FileDropzone />
-        </div>
+      <div class="mt-5 w-full animate-fade-up" style="animation-delay: .12s">
         <div class="rounded-[20px] border border-white/80 bg-white/70 p-5 shadow-soft backdrop-blur-sm">
           <DirectionPicker />
         </div>

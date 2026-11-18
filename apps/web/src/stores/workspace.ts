@@ -101,8 +101,10 @@ export const workspace = {
   },
 
   async addFiles(fileList: File[]): Promise<void> {
+    const added: UploadFileState[] = []
+    const pending: Array<{ file: File; item: UploadFileState }> = []
     for (const file of fileList) {
-      if (state.files.length >= MAX_FILES) {
+      if (state.files.length + added.length >= MAX_FILES) {
         notify('一次最多带上几份文件就够了，先处理这些吧', 'error')
         break
       }
@@ -116,15 +118,24 @@ export const workspace = {
         error: allowed ? undefined : 'unsupported',
       }
       state.files.push(item)
+      const tracked = state.files[state.files.length - 1]
+      added.push(tracked)
       if (!allowed) continue
 
       if (file.size > MAX_FILE_SIZE) {
-        item.stage = '需要检查'
-        item.message = friendlyFileSizeError()
-        item.error = 'too-large'
+        tracked.stage = '需要检查'
+        tracked.message = friendlyFileSizeError()
+        tracked.error = 'too-large'
         continue
       }
+      pending.push({ file, item: tracked })
+    }
 
+    if (added.length) {
+      pushMessage('用户', '', { kind: 'file', fileUids: added.map((item) => item.uid) })
+    }
+
+    for (const { file, item } of pending) {
       item.stage = '读取中'
       item.message = '正在读取内容…'
       const content = await readFile(file, item)
@@ -140,6 +151,10 @@ export const workspace = {
   removeFile(fileUid: string): void {
     const index = state.files.findIndex((file) => file.uid === fileUid)
     if (index >= 0) state.files.splice(index, 1)
+    for (const message of state.messages) {
+      if (message.fileUids) message.fileUids = message.fileUids.filter((item) => item !== fileUid)
+    }
+    state.messages = state.messages.filter((message) => message.kind !== 'file' || (message.fileUids?.length ?? 0) > 0)
     recommend()
   },
 
