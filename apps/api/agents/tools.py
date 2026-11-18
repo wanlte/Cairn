@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from apps.api.agents.state import ContextBundle
+from apps.api.errors import AppError
 from apps.api.extraction.schemas import ExtractionCreateRequest
 from apps.api.extraction.service import extraction_service
 from apps.api.gateway.langchain_adapter import GatewayChatModel
@@ -90,7 +91,11 @@ async def generate_review(
 ) -> ToolResult:
     """复盘师工具：基于碎片生成复盘报告。"""
     if context.fragment_count <= 0 and not context.conversation_ids:
-        return ToolResult(ok=False, message="还没有可复盘的内容")
+        return ToolResult(
+            ok=False,
+            message="还没有可复盘的内容",
+            data={"review_id": None, "summary": "这次还没有可回看的对话，带上几份对话再来试试。"},
+        )
     request = ReviewCreateRequest(
         period=period,
         conversation_id=context.conversation_ids[0] if context.conversation_ids else None,
@@ -98,23 +103,46 @@ async def generate_review(
         supplement=context.supplement or None,
         **_creds(ctx),
     )
-    report = await review_service.create_report(ctx.session, ctx.user_id, request)
+    try:
+        report = await review_service.create_report(ctx.session, ctx.user_id, request)
+    except AppError:
+        return ToolResult(
+            ok=False,
+            message="复盘没能生成，换一个模型再试试",
+            data={"review_id": None, "summary": "这次没能整理出复盘，换个模型或再带几份对话试试。"},
+        )
+    data = {"review_id": report.id, "summary": ""}
     if report.status == "FAILED":
-        return ToolResult(ok=False, message="复盘没能生成，换一个模型再试试")
+        data["summary"] = "这次复盘没能完整写好，下面还能看到已经记下的部分，也可以换个模型再试一次。"
+        return ToolResult(ok=False, message="复盘没能生成，换一个模型再试试", data=data)
+
     overview = report.overview or {}
-    lines: list[str] = []
-    for value in overview.values():
-        if isinstance(value, str) and value.strip():
-            lines.append(value.strip())
-        elif isinstance(value, dict):
-            for nested in value.values():
-                if isinstance(nested, str) and nested.strip():
-                    lines.append(nested.strip())
-    summary = "\n".join(lines[:6]) or "这次对话里有一些值得记住的进展。"
+    key_events = [item for item in report.items if item.section == "key_event"]
+    cognitive = [item for item in report.items if item.section == "cognitive_change"]
+    actions = report.action_items
+
+    parts: list[str] = []
+    comparison = overview.get("comparison_with_last_period")
+    if isinstance(comparison, str) and comparison.strip():
+        parts.append(comparison.strip())
+    if key_events:
+        first = key_events[0].payload or {}
+        background = first.get("background") or first.get("my_judgment")
+        if background:
+            parts.append(f"这次最值得回看的是：{background}")
+    if cognitive:
+        first_change = cognitive[0].payload or {}
+        new_belief = first_change.get("new_belief")
+        if new_belief:
+            parts.append(f"你的想法有了一个变化：{new_belief}")
+    if actions:
+        parts.append(f"下一步可以先做：{actions[0].content}")
+    data["summary"] = "\n".join(parts) or "这次对话里有一些值得记住的进展。"
+
     return ToolResult(
         ok=True,
         message="复盘报告写好了",
-        data={"review_id": report.id, "summary": summary},
+        data=data,
     )
 
 

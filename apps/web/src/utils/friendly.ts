@@ -101,6 +101,67 @@ export function friendlyFileSizeError(): string {
   return '这个文件有点大，换一个小一点的试试'
 }
 
+const verdictLabels: Record<string, string> = {
+  CORRECT: '判断对了',
+  PARTIAL: '有对有偏',
+  WRONG: '这次看偏了',
+  UNVERIFIED: '还待验证',
+}
+
+const attributionLabels: Record<string, string> = {
+  NONE: '没有特别的原因',
+  KNOWLEDGE_GAP: '当时还缺这块知识',
+  VERIFICATION_MISSING: '少了验证这一步',
+  ASSUMPTION_WRONG: '前提假设不成立',
+  TIME_PRESSURE: '时间太赶',
+  COMMUNICATION: '沟通没对齐',
+}
+
+const actionStatusLabels: Record<string, string> = {
+  PENDING: '还没开始',
+  VERIFIED: '已经做到',
+  REOPENED: '重新打开',
+}
+
+export function friendlyVerdict(verdict?: string | null): string {
+  return verdictLabels[verdict || ''] || '还待验证'
+}
+
+export function verdictTone(verdict?: string | null): string {
+  if (verdict === 'CORRECT') return 'bg-teal-50 text-[#0f766e]'
+  if (verdict === 'PARTIAL') return 'bg-[#fff5e6] text-[#b45309]'
+  if (verdict === 'WRONG') return 'bg-red-50 text-[#b42318]'
+  return 'bg-[#f1f4f9] text-[#667085]'
+}
+
+export function friendlyAttribution(attribution?: string | null): string {
+  const label = attributionLabels[attribution || '']
+  return label || ''
+}
+
+export function friendlyActionStatus(status?: string | null): string {
+  return actionStatusLabels[status || ''] || '还没开始'
+}
+
+export function actionStatusTone(status?: string | null): string {
+  if (status === 'VERIFIED') return 'bg-teal-50 text-[#0f766e]'
+  if (status === 'REOPENED') return 'bg-[#fff5e6] text-[#b45309]'
+  return 'bg-[#f1f4f9] text-[#667085]'
+}
+
+export function friendlyReportStatus(status?: string | null): string {
+  if (status === 'DONE') return '已完成'
+  if (status === 'FAILED') return '这次没写成'
+  return '还在整理'
+}
+
+export function friendlyDate(iso?: string | null): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()} 年 ${date.getMonth() + 1} 月 ${date.getDate()} 日`
+}
+
 export function fileSizeText(size: number): string {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`

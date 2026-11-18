@@ -5,6 +5,9 @@ import type {
   DirectionKey,
   ModelSelection,
   QuickModelOption,
+  ReviewItem,
+  ReviewReport,
+  ActionItemRecord,
   TaskStage,
 } from '../types'
 
@@ -139,6 +142,8 @@ export interface WorkspaceTaskResponse {
   stage: string
   recommend_reason?: string | null
   confirm_prompt?: string | null
+  result?: AgentResult | null
+  report_id?: number | null
 }
 
 export interface WorkspaceConfirmBody {
@@ -160,4 +165,21 @@ export const workspaceApi = {
 
   confirm: (taskId: string, body: WorkspaceConfirmBody) =>
     api.post<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}/confirm`, body),
+}
+
+export const reviewApi = {
+  list: () => api.get<ReviewReport[]>('/reviews'),
+
+  get: (reportId: number) => api.get<ReviewReport>(`/reviews/${reportId}`),
+
+  exportText: (reportId: number) => api.getText(`/reviews/${reportId}/export`),
+
+  verifyAction: (actionId: number, note?: string) =>
+    api.post<ActionItemRecord>(`/reviews/action-items/${actionId}/verify`, { note: note || null }),
+
+  reopenAction: (actionId: number, note?: string) =>
+    api.post<ActionItemRecord>(`/reviews/action-items/${actionId}/reopen`, { note: note || null }),
+
+  feedback: (itemId: number, decision: 'AGREE' | 'DISAGREE') =>
+    api.post<ReviewItem>(`/reviews/items/${itemId}/feedback`, { decision }),
 }

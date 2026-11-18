@@ -65,11 +65,12 @@ async def reviewer_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> di
     """复盘师：生成复盘报告。"""
     context = _context(state)
     updates = _emit(state, AgentRole.REVIEWER, "复盘师正在认真回顾这段时间…")
-    result = await generate_review(tool_ctx, context, _period(state))
-    if result.ok:
+    review_period = f"{_period(state)}-r{context.revisions}"
+    result = await generate_review(tool_ctx, context, review_period)
+    if result.data.get("review_id") is not None:
         context.review_id = result.data.get("review_id")
-        context.review_summary = result.data.get("summary", "")
-    else:
+    context.review_summary = result.data.get("summary", "")
+    if not result.ok:
         context.evidence_weak = True
     _write_context(updates, context)
     updates.update(_emit(state, AgentRole.REVIEWER, result.message, done=result.ok))
@@ -128,8 +129,13 @@ async def auditor_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dic
 
 
 def finish_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dict:
-    """汇总最终结果。"""
+    """汇总最终结果，并把结果卡片一起推进对话流。"""
     context = _context(state)
+    result_payload = (
+        {"result": context.final_result.model_dump(mode="json")}
+        if context.final_result is not None
+        else None
+    )
     return {
         "stage": "WAITING_CONFIRM",
         "events": state.get("events", [])
@@ -139,6 +145,7 @@ def finish_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dict:
                 message="都处理好了，请你确认一下",
                 stage="WAITING_CONFIRM",
                 confirm_prompt="这份结果需要你点头确认，确认后就正式保存。",
+                result=result_payload,
             ).model_dump()
         ],
         "context": context.model_dump(mode="json"),
@@ -154,6 +161,7 @@ def _intent(state: WorkspaceState) -> TaskIntent:
 
 def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: TaskIntent) -> AgentResult:
     label = INTENT_LABELS.get(intent, "自由提问")
+    report_id = context.review_id
     if intent == TaskIntent.GROWTH and context.profile_id:
         return AgentResult(
             kind="画像",
@@ -161,6 +169,7 @@ def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: Task
             summary=context.profile_summary or "画像已经更新好了。",
             suggestions=["换个方向再看看", "继续补充对话，让画像更完整"],
             next_label="再聊几句",
+            report_id=report_id,
         )
     if intent == TaskIntent.FREE and context.answer:
         return AgentResult(
@@ -169,6 +178,7 @@ def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: Task
             summary=context.answer,
             suggestions=["换个角度再问一次", "上传对话，让回答更有依据"],
             next_label="继续提问",
+            report_id=report_id,
         )
     return AgentResult(
         kind="复盘",
@@ -176,6 +186,7 @@ def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: Task
         summary=context.review_summary or "已经帮你梳理好这段时间的重点。",
         suggestions=["更新一次成长画像", "带着具体问题继续追问"],
         next_label="更新画像",
+        report_id=report_id,
     )
 
 

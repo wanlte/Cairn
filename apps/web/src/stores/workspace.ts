@@ -11,6 +11,7 @@ import type {
   UploadFileState,
 } from '../types'
 import { friendlyError, friendlyFileError, friendlyFileSizeError, friendlyStage } from '../utils/friendly'
+import { normalizeAgentResult } from '../utils/review'
 import { recommendDirection } from '../utils/direction'
 
 const MAX_FILES = 10
@@ -253,6 +254,7 @@ export const workspace = {
       confirmedTask = state.taskId
       state.stage = friendlyStage(response.stage)
       state.confirmPrompt = ''
+      if (confirmed && response.result) showResult(response.result)
       pushMessage('助手', confirmed ? '好的，已经帮你保存好了' : '好的，这次就先不采纳')
     } catch (err) {
       state.stage = '遇到问题'
@@ -306,6 +308,25 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
+function showResult(raw: AgentResult | null | undefined): void {
+  const result = normalizeAgentResult(raw)
+  if (!result) return
+  state.result = result
+  const existing = [...state.messages]
+    .reverse()
+    .find((item) => item.kind === 'result')
+  if (
+    existing &&
+    existing.result?.title === result.title &&
+    existing.result?.report_id === result.report_id
+  ) {
+    existing.result = result
+    existing.text = result.summary
+    return
+  }
+  pushMessage('助手', result.summary, { kind: 'result', result })
+}
+
 function applyEvent(event: import('../api/client').WorkspaceEvent): void {
   if (confirmedTask && state.taskId === confirmedTask) return
   if (event.stage) state.stage = friendlyStage(event.stage)
@@ -326,10 +347,7 @@ function applyEvent(event: import('../api/client').WorkspaceEvent): void {
       })
     }
   }
-  if (event.result) {
-    state.result = event.result
-    pushMessage('助手', event.result.summary, { kind: 'result', result: event.result })
-  }
+  if (event.result) showResult(event.result)
   if (event.confirmPrompt) state.confirmPrompt = event.confirmPrompt
   if (activeStreamTask && state.stage === '已完成') activeStreamTask = ''
 }

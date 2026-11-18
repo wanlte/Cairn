@@ -110,6 +110,72 @@ async def test_auditor_triggers_one_revision(monkeypatch):
     assert "审核员" in [e["role"] for e in final["events"] if e.get("role")]
 
 
+@pytest.mark.asyncio
+async def test_finish_event_carries_report_preview(monkeypatch):
+    async def fake_review(ctx, context, period):
+        return ToolResult(
+            ok=True,
+            message="复盘报告写好了",
+            data={"review_id": 42, "summary": "这次最值得回看的是翻页重排"},
+        )
+
+    monkeypatch.setattr("apps.api.agents.nodes.generate_review", fake_review)
+
+    graph = build_workspace_graph(_tool_ctx(FakeGateway()))
+    final = await graph.ainvoke(_state(TaskIntent.WEEKLY))
+
+    context = _context(final)
+    assert context.final_result is not None
+    assert context.final_result.report_id == 42
+    result_events = [event for event in final["events"] if event.get("result")]
+    assert len(result_events) == 1
+    assert result_events[0]["result"]["result"]["report_id"] == 42
+    assert result_events[0]["confirm_prompt"]
+
+
+@pytest.mark.asyncio
+async def test_failed_review_still_points_to_report(monkeypatch):
+    async def fake_review(ctx, context, period):
+        return ToolResult(
+            ok=False,
+            message="复盘没能生成，换一个模型再试试",
+            data={"review_id": 77, "summary": "这次复盘没能完整写好，也可以换个模型再试一次。"},
+        )
+
+    monkeypatch.setattr("apps.api.agents.nodes.generate_review", fake_review)
+
+    graph = build_workspace_graph(_tool_ctx(FakeGateway()))
+    final = await graph.ainvoke(_state(TaskIntent.WEEKLY))
+
+    context = _context(final)
+    assert context.final_result is not None
+    assert context.final_result.report_id == 77
+    assert "没能完整写好" in context.final_result.summary
+
+
+def test_task_response_exposes_result_and_report_id():
+    from apps.api.workspace.schemas import WorkspaceTaskResponse
+
+    task = SimpleNamespace(
+        task_key="task-1",
+        status="WAITING_CONFIRM",
+        recommend_reason=None,
+        confirm_prompt="这份结果需要你点头确认，确认后就正式保存。",
+        result_json={
+            "kind": "复盘",
+            "title": "本周复盘 · 已完成",
+            "summary": "这次最值得回看的是翻页重排",
+            "suggestions": [],
+            "next_label": "更新画像",
+            "report_id": 42,
+        },
+    )
+    response = WorkspaceTaskResponse.from_task(task)
+    assert response.report_id == 42
+    assert response.result is not None
+    assert response.result["report_id"] == 42
+
+
 def test_langchain_adapter_routes_to_gateway_complete():
     import asyncio
 

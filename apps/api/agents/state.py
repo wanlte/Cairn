@@ -51,6 +51,7 @@ class AgentResult(BaseModel):
     summary: str
     suggestions: list[str] = Field(default_factory=list)
     next_label: str | None = None
+    report_id: int | None = None
 
 
 class ContextBundle(BaseModel):

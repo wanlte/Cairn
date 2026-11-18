@@ -413,48 +413,104 @@ class ReviewService:
     async def export_report_markdown(
         self, session: AsyncSession, user_id: int, report_id: int
     ) -> str:
+        """导出面向用户的复盘记录：只保留结论，不暴露任何技术字段。"""
         report = await self.get_report(session, user_id, report_id)
-        lines = [
-            f"# Cairn 周复盘 · {report.period}",
-            "",
-            f"模型：{report.provider or '-'} / {report.model or '-'}",
-            f"提示词版本：{report.prompt_version}",
-            "",
-            "## 概览",
-            json.dumps(report.overview, ensure_ascii=False, indent=2),
-            "",
-            "## 关键事件",
-        ]
-        for item in report.items:
-            if item.section != "key_event":
-                continue
-            lines.append(
-                f"- #{item.fragment_id} {item.payload.get('background', '')}"
-            )
-        lines.extend(["", "## 对错判断"])
-        for item in report.items:
-            if item.section != "judgment":
-                continue
-            evidence = ", ".join(str(value) for value in item.evidence_fragment_ids)
-            lines.append(
-                f"- **{item.verdict}** · {item.attribution or '-'} · "
-                f"{item.payload.get('reason', '')}（证据 #{evidence}）"
-            )
-        lines.extend(["", "## 认知变化"])
-        for item in report.items:
-            if item.section != "cognitive_change":
-                continue
-            lines.append(
-                f"- {item.payload.get('old_belief', '')} → {item.payload.get('new_belief', '')}"
-            )
-        lines.extend(["", "## 行动项"])
+        verdict_labels = {
+            "CORRECT": "判断对了",
+            "PARTIAL": "有对有偏",
+            "WRONG": "这次看偏了",
+            "UNVERIFIED": "还待验证",
+        }
+        attribution_labels = {
+            "NONE": "没有特别的原因",
+            "KNOWLEDGE_GAP": "当时还缺这块知识",
+            "VERIFICATION_MISSING": "少了验证这一步",
+            "ASSUMPTION_WRONG": "前提假设不成立",
+            "TIME_PRESSURE": "时间太赶",
+            "COMMUNICATION": "沟通没对齐",
+        }
+        when = report.created_at.strftime("%Y 年 %m 月 %d 日") if report.created_at else ""
+        lines = ["# 我的复盘记录", ""]
+        if when:
+            lines.extend([f"记于 {when}", ""])
+
+        overview = report.overview or {}
+        dialogue_count = overview.get("dialogue_count")
+        comparison = overview.get("comparison_with_last_period")
+        domains = overview.get("domain_distribution") or []
+        topics = overview.get("investment_distribution") or []
+
+        lines.extend(["## 这一段做了什么", ""])
+        stat_count = 0
+        if isinstance(dialogue_count, int) and dialogue_count > 0:
+            lines.append(f"- 一共回看了 {dialogue_count} 段对话")
+            stat_count += 1
+        for entry in domains[:5]:
+            if isinstance(entry, dict) and entry.get("domain"):
+                lines.append(f"- {entry['domain']}：{entry.get('count', 0)} 段")
+                stat_count += 1
+        for entry in topics[:5]:
+            if isinstance(entry, dict) and entry.get("topic"):
+                lines.append(f"- 在「{entry['topic']}」上花了 {entry.get('count', 0)} 次讨论")
+                stat_count += 1
+        if isinstance(comparison, str) and comparison.strip():
+            lines.append(f"- {comparison.strip()}")
+            stat_count += 1
+        if stat_count == 0:
+            lines.append("- 这次还没有可用的统计")
+        lines.append("")
+
+        lines.extend(["## 值得回看的几件事", ""])
+        key_events = [item for item in report.items if item.section == "key_event"]
+        for item in key_events:
+            payload = item.payload or {}
+            background = payload.get("background", "")
+            judgment = payload.get("my_judgment", "")
+            outcome = payload.get("actual_outcome", "")
+            if background:
+                lines.append(f"### {background}")
+                if judgment:
+                    lines.append(f"- 当时的判断：{judgment}")
+                if outcome:
+                    lines.append(f"- 后来怎么样：{outcome}")
+                lines.append("")
+        if not key_events:
+            lines.extend(["这次没有特别标出来的事件。", ""])
+
+        lines.extend(["## 判断与原因", ""])
+        judgments = [item for item in report.items if item.section == "judgment"]
+        for item in judgments:
+            verdict = verdict_labels.get(item.verdict or "", "还待验证")
+            attribution = attribution_labels.get(item.attribution or "", "")
+            reason = (item.payload or {}).get("reason", "")
+            suffix = f"（{attribution}）" if attribution else ""
+            lines.append(f"- **{verdict}**{suffix}：{reason}")
+        if not judgments:
+            lines.append("- 这次没有需要复核的判断。")
+        lines.append("")
+
+        lines.extend(["## 想法的转变", ""])
+        changes = [item for item in report.items if item.section == "cognitive_change"]
+        for item in changes:
+            payload = item.payload or {}
+            old = payload.get("old_belief", "")
+            new = payload.get("new_belief", "")
+            if old or new:
+                lines.append(f"- 从「{old}」，到现在更倾向「{new}」")
+        if not changes:
+            lines.append("- 这次没有记录到明显的想法变化。")
+        lines.append("")
+
+        lines.extend(["## 接下来做什么", ""])
         for action in report.action_items:
-            lines.append(
-                f"- [{ 'x' if action.status == ActionItemStatus.VERIFIED else ' ' }] "
-                f"{action.content}｜验证：{action.verification}"
-            )
+            checked = "x" if action.status == ActionItemStatus.VERIFIED else " "
+            lines.append(f"- [{checked}] {action.content}")
+            if action.verification:
+                lines.append(f"  - 怎么算做到：{action.verification}")
             if action.verification_note:
-                lines.append(f"  - 验证备注：{action.verification_note}")
+                lines.append(f"  - 我的记录：{action.verification_note}")
+        if not report.action_items:
+            lines.append("- 这次没有定下行动项。")
         return "\n".join(lines) + "\n"
 
 

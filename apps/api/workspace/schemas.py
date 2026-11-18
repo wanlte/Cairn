@@ -60,14 +60,19 @@ class WorkspaceTaskResponse(BaseModel):
     stage: str
     recommend_reason: str | None = None
     confirm_prompt: str | None = None
+    result: dict[str, Any] | None = None
+    report_id: int | None = None
 
     @classmethod
     def from_task(cls, task) -> WorkspaceTaskResponse:
+        raw = task.result_json if isinstance(task.result_json, dict) else None
         return cls(
             task_id=task.task_key,
             stage=task.status,
             recommend_reason=task.recommend_reason,
             confirm_prompt=task.confirm_prompt,
+            result=raw,
+            report_id=raw.get("report_id") if raw else None,
         )
 
 

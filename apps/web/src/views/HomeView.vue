@@ -49,10 +49,10 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
 
       <div v-if="workspace.state.messages.length" class="mb-6 w-full space-y-3">
         <div
-          v-for="message in workspace.state.messages.filter((item) => item.kind !== 'result')"
+          v-for="message in workspace.state.messages"
           :key="message.id"
           class="flex animate-fade-up"
-          :class="message.role === '用户' ? 'justify-end' : 'justify-start'"
+          :class="message.kind === 'result' ? 'w-full' : message.role === '用户' ? 'justify-end' : 'justify-start'"
         >
           <div
             v-if="message.kind === 'file'"
@@ -89,6 +89,9 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
                 </button>
               </div>
             </div>
+          </div>
+          <div v-else-if="message.kind === 'result' && message.result" class="w-full">
+            <ResultCard :result="message.result" @next="workspace.setDirection('free')" />
           </div>
           <div
             v-else-if="message.kind === 'agent'"
@@ -140,10 +143,6 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
           <button type="button" class="btn small" @click="workspace.confirm(true)">好，按这个来</button>
           <button type="button" class="btn ghost small" @click="workspace.confirm(false)">再想想</button>
         </div>
-      </div>
-
-      <div v-if="workspace.state.result" class="mt-5 w-full">
-        <ResultCard :result="workspace.state.result" @next="workspace.setDirection('free')" />
       </div>
 
       <div

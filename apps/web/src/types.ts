@@ -74,7 +74,20 @@ export interface ReviewItem {
   fragment_id: number | null
   evidence_fragment_ids: number[]
   payload: Record<string, unknown>
-  feedback: Record<string, unknown> | null
+  feedback: { decision?: string; note?: string | null } | null
+}
+
+export interface ReviewDistributionEntry {
+  domain?: string
+  topic?: string
+  count: number
+}
+
+export interface ReviewOverview {
+  dialogue_count?: number
+  domain_distribution?: ReviewDistributionEntry[]
+  investment_distribution?: ReviewDistributionEntry[]
+  comparison_with_last_period?: string
 }
 
 export interface ActionItemRecord {
@@ -91,9 +104,10 @@ export interface ActionItemRecord {
 
 export interface ReviewReport {
   id: number
+  user_id: number
   period: string
   status: string
-  overview: Record<string, unknown>
+  overview: ReviewOverview
   prompt_version: string
   model: string | null
   provider: string | null
@@ -234,7 +248,8 @@ export interface AgentResult {
   title: string
   summary: string
   suggestions: string[]
-  nextLabel?: string
+  next_label?: string | null
+  report_id?: number | null
 }
 
 export type TaskStage = '等待中' | '处理中' | '请确认' | '已完成' | '遇到问题'

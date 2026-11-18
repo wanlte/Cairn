@@ -164,8 +164,94 @@ async def test_review_markdown_export(client, monkeypatch):
     )
 
     assert response.status_code == 200
-    assert "Cairn 周复盘 · 2026-W47" in response.text
+    assert "我的复盘记录" in response.text
     assert "补一组稳定性测试" in response.text
+    assert "怎么算做到：翻页不重不漏" in response.text
+    assert "提示词版本" not in response.text
+    assert "模型：" not in response.text
+    assert "evidence_fragment_ids" not in response.text
+
+
+async def test_export_hides_technical_fields(monkeypatch):
+    from datetime import UTC, datetime
+
+    from apps.api.review.schemas import (
+        ActionItemResponse,
+        ReviewItemResponse,
+        ReviewReportResponse,
+    )
+    from apps.api.review.service import review_service
+
+    report = ReviewReportResponse(
+        id=1,
+        user_id=1,
+        period="ws-technical-period",
+        status="DONE",
+        overview={
+            "dialogue_count": 12,
+            "domain_distribution": [{"domain": "工程实践", "count": 5}],
+            "investment_distribution": [],
+            "comparison_with_last_period": "比上一段更聚焦",
+        },
+        prompt_version="review-v1",
+        model="fake-model",
+        provider="deepseek",
+        created_at=datetime(2026, 11, 18, tzinfo=UTC),
+        items=[
+            ReviewItemResponse(
+                id=1,
+                section="key_event",
+                fragment_id=7,
+                evidence_fragment_ids=[7],
+                payload={
+                    "fragment_id": 7,
+                    "background": "翻页重排",
+                    "my_judgment": "先改索引",
+                    "actual_outcome": "还是会重复",
+                },
+            ),
+            ReviewItemResponse(
+                id=2,
+                section="judgment",
+                verdict="PARTIAL",
+                attribution="VERIFICATION_MISSING",
+                fragment_id=7,
+                evidence_fragment_ids=[7],
+                payload={"reason": "没跑回归"},
+            ),
+        ],
+        action_items=[
+            ActionItemResponse(
+                id=1,
+                report_id=1,
+                content="补一组稳定性测试",
+                verification="翻页不重不漏",
+                evidence_fragment_ids=[7],
+            )
+        ],
+    )
+
+    async def fake_get_report(session, user_id, report_id):
+        return report
+
+    monkeypatch.setattr(review_service, "get_report", fake_get_report)
+    text = await review_service.export_report_markdown(None, 1, 1)
+
+    assert "# 我的复盘记录" in text
+    assert "翻页重排" in text
+    assert "有对有偏" in text
+    assert "少了验证这一步" in text
+    assert "怎么算做到：翻页不重不漏" in text
+    for hidden in (
+        "review-v1",
+        "fake-model",
+        "deepseek",
+        "ws-technical-period",
+        "VERIFICATION_MISSING",
+        "fragment_id",
+        "evidence_fragment_ids",
+    ):
+        assert hidden not in text
 
 
 async def test_profile_markdown_export(client, monkeypatch):
