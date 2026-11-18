@@ -3,15 +3,22 @@ import { computed, onMounted } from 'vue'
 import { AlertCircle, CheckCircle2, FileText, Info, LoaderCircle, MessagesSquare, Paperclip, Trash2 } from 'lucide-vue-next'
 import ChatComposer from '../components/ChatComposer.vue'
 import DirectionPicker from '../components/DirectionPicker.vue'
-import TaskProgress from '../components/TaskProgress.vue'
 import ResultCard from '../components/ResultCard.vue'
 import { workspace } from '../stores/workspace'
 import { fileSizeText, friendlyStageMessage } from '../utils/friendly'
-import type { UploadFileState } from '../types'
+import type { AgentRoleLabel, UploadFileState } from '../types'
 
 onMounted(() => {
   workspace.loadQuickModels()
 })
+
+const agentEmoji: Record<AgentRoleLabel, string> = {
+  整理师: '🧺',
+  复盘师: '📝',
+  画像师: '🧭',
+  问答教练: '💬',
+  审核员: '🔎',
+}
 
 const noticeIcon = computed(() =>
   workspace.state.noticeKind === 'error' ? AlertCircle : workspace.state.noticeKind === 'success' ? CheckCircle2 : Info,
@@ -84,6 +91,23 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
             </div>
           </div>
           <div
+            v-else-if="message.kind === 'agent'"
+            class="flex max-w-[88%] items-start gap-2.5 rounded-[18px] rounded-bl-md border border-white/80 bg-white/90 px-3.5 py-3 shadow-sm sm:max-w-[80%]"
+          >
+            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand/10 to-brand-teal/15 text-[16px]">
+              {{ agentEmoji[message.role as AgentRoleLabel] || '✨' }}
+            </div>
+            <div class="min-w-0">
+              <p class="text-[12px] font-semibold text-brand">{{ message.role }}</p>
+              <p class="mt-0.5 flex items-center gap-1.5 text-[13px] leading-relaxed text-[#5b6478]">
+                <LoaderCircle v-if="message.agentState === '进行中'" :size="13" class="shrink-0 animate-spin text-brand/60" />
+                <CheckCircle2 v-else-if="message.agentState === '完成'" :size="13" class="shrink-0 text-[#0f766e]" />
+                <AlertCircle v-else :size="13" class="shrink-0 text-[#b45309]" />
+                {{ message.text }}
+              </p>
+            </div>
+          </div>
+          <div
             v-else-if="message.text"
             class="max-w-[85%] rounded-[18px] px-4 py-3 text-[14px] leading-relaxed shadow-sm"
             :class="message.role === '用户'
@@ -105,14 +129,9 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
         </div>
       </div>
 
-      <div class="mt-5 w-full animate-fade-up" style="animation-delay: .18s">
-        <div class="mb-2.5 flex items-center gap-2 pl-1">
-          <span class="inline-block h-1.5 w-1.5 rounded-full bg-gradient-to-r from-brand to-brand-teal"></span>
-          <span class="text-[12px] font-semibold text-[#7a839a]">
-            协作进度 · {{ friendlyStageMessage(workspace.state.stage) }}
-          </span>
-        </div>
-        <TaskProgress />
+      <div v-if="workspace.state.bubbles.length" class="mt-4 flex items-center gap-2 pl-1 text-[12px] text-[#9aa2b4] animate-fade-up">
+        <span class="inline-block h-1.5 w-1.5 rounded-full bg-gradient-to-r from-brand to-brand-teal"></span>
+        {{ friendlyStageMessage(workspace.state.stage) }}
       </div>
 
       <div v-if="workspace.state.confirmPrompt" class="mt-5 w-full animate-fade-up rounded-[20px] border border-[#b45309]/20 bg-[#fff9ee] p-5">

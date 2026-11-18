@@ -215,8 +215,10 @@ export interface ConversationMessage {
   role: '用户' | '助手' | AgentRoleLabel
   text: string
   createdAt: string
-  kind?: 'text' | 'result' | 'file'
+  kind?: 'text' | 'result' | 'file' | 'agent'
   fileUids?: string[]
+  bubbleId?: string
+  agentState?: '进行中' | '完成' | '需要确认'
   result?: AgentResult
 }
 

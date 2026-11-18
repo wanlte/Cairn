@@ -285,6 +285,18 @@ function handleEvent(event: import('../api/client').WorkspaceEvent): void {
     const existing = state.bubbles.find((item) => item.id === event.bubble!.id)
     if (existing) Object.assign(existing, event.bubble)
     else state.bubbles.push({ ...event.bubble! })
+
+    const message = state.messages.find((item) => item.bubbleId === event.bubble!.id)
+    if (message) {
+      message.text = event.bubble.message
+      message.agentState = event.bubble.state
+    } else {
+      pushMessage(event.bubble.role, event.bubble.message, {
+        kind: 'agent',
+        bubbleId: event.bubble.id,
+        agentState: event.bubble.state,
+      })
+    }
   }
   if (event.result) {
     state.result = event.result
