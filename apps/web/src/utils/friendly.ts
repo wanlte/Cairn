@@ -83,6 +83,16 @@ export function friendlyError(err: unknown): string {
   return '这一步没能完成，换个方式再试试'
 }
 
+export function friendlyAuthError(err: unknown, mode: 'login' | 'register'): string {
+  if (err instanceof ApiError) {
+    const code = err.body?.code || ''
+    if (code === 'EMAIL_EXISTS' || err.status === 409) return '这个邮箱已经注册过了，直接登录就好'
+    if (code === 'VALIDATION_ERROR' || err.status === 422) return '密码至少要 8 位，换一个长一点的试试'
+    if (code === 'INVALID_CREDENTIALS' || (err.status === 401 && mode === 'login')) return '邮箱或密码不对，再检查一下'
+  }
+  return mode === 'register' ? '这次没注册成功，换个邮箱或密码再试' : '这次没能登录，稍后再试一次'
+}
+
 export function friendlyFileError(): string {
   return '这个文件暂时读不出来，换一个导出文件试试'
 }
