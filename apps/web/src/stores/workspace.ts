@@ -51,6 +51,32 @@ const state = reactive({
 let activeStreamTask = ''
 let confirmedTask = ''
 
+const PLAYBACK_STEP_MS = 600
+let playbackQueue: import('../api/client').WorkspaceEvent[] = []
+let playbackTimer: ReturnType<typeof setTimeout> | null = null
+
+function resetPlayback(): void {
+  playbackQueue = []
+  if (playbackTimer !== null) {
+    clearTimeout(playbackTimer)
+    playbackTimer = null
+  }
+}
+
+function pumpPlayback(): void {
+  if (playbackTimer !== null) return
+  const step = (): void => {
+    const next = playbackQueue.shift()
+    if (!next) {
+      playbackTimer = null
+      return
+    }
+    applyEvent(next)
+    playbackTimer = setTimeout(step, PLAYBACK_STEP_MS)
+  }
+  step()
+}
+
 function pushMessage(role: ConversationMessage['role'], text: string, extra: Partial<ConversationMessage> = {}): void {
   state.messages.push({
     id: uid(),
@@ -180,7 +206,9 @@ export const workspace = {
     state.bubbles.splice(0)
     state.result = null
     state.confirmPrompt = ''
+    resetPlayback()
     pushMessage('用户', text || '帮我看看这些对话')
+    pushMessage('助手', '收到，我来帮你看看')
     state.input = ''
 
     try {
@@ -200,7 +228,6 @@ export const workspace = {
       state.taskId = response.task_id
       state.stage = friendlyStage(response.stage)
       state.recommendReason = response.recommend_reason || state.recommendReason
-      state.confirmPrompt = response.confirm_prompt || ''
       workspaceApi.events(response.task_id, handleEvent).catch(() => undefined)
     } catch (err) {
       state.stage = '遇到问题'
@@ -215,6 +242,7 @@ export const workspace = {
   async confirm(confirmed: boolean): Promise<void> {
     if (!state.taskId || state.busy) return
     state.busy = true
+    resetPlayback()
     state.confirmPrompt = ''
     try {
       const response = await workspaceApi.confirm(state.taskId, {
@@ -278,7 +306,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
-function handleEvent(event: import('../api/client').WorkspaceEvent): void {
+function applyEvent(event: import('../api/client').WorkspaceEvent): void {
   if (confirmedTask && state.taskId === confirmedTask) return
   if (event.stage) state.stage = friendlyStage(event.stage)
   if (event.bubble) {
@@ -304,4 +332,10 @@ function handleEvent(event: import('../api/client').WorkspaceEvent): void {
   }
   if (event.confirmPrompt) state.confirmPrompt = event.confirmPrompt
   if (activeStreamTask && state.stage === '已完成') activeStreamTask = ''
+}
+
+function handleEvent(event: import('../api/client').WorkspaceEvent): void {
+  if (confirmedTask && state.taskId === confirmedTask) return
+  playbackQueue.push(event)
+  pumpPlayback()
 }
