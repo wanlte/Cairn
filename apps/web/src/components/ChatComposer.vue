@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ArrowUp, Sparkles } from 'lucide-vue-next'
+import { ArrowUp, Sparkles, X } from 'lucide-vue-next'
 import FileDropzone from './FileDropzone.vue'
 import DirectionPicker from './DirectionPicker.vue'
 import { workspace } from '../stores/workspace'
@@ -30,6 +30,25 @@ function onKeydown(event: KeyboardEvent): void {
   >
     <div class="border-b border-[#eef0f6] px-5 pb-3 pt-4">
       <DirectionPicker />
+    </div>
+    <div v-if="workspace.selectedPrompts.value.length" class="flex flex-wrap items-center gap-1.5 px-5 pt-3 animate-fade-up">
+      <span class="text-[10px] text-[#a3abbb]">已带提示词</span>
+      <span
+        v-for="prompt in workspace.selectedPrompts.value"
+        :key="prompt.id"
+        class="inline-flex items-center gap-1 rounded-full bg-brand/5 px-2.5 py-1 text-[11px] font-semibold text-brand"
+        :title="prompt.text"
+      >
+        {{ prompt.label }}
+        <button
+          type="button"
+          class="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:bg-brand/10"
+          :aria-label="`移除 ${prompt.label}`"
+          @click="workspace.togglePrompt(prompt.id)"
+        >
+          <X :size="10" />
+        </button>
+      </span>
     </div>
     <div class="flex items-start gap-3 px-5 pt-3">
       <div class="mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-teal text-white">

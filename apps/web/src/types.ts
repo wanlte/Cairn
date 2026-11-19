@@ -271,6 +271,14 @@ export interface DirectionOption {
   prompt: string
 }
 
+export interface PromptPreset {
+  id: string
+  label: string
+  text: string
+  direction: DirectionKey
+  custom?: boolean
+}
+
 export interface QuickSavedCredential {
   id: number
   name: string

@@ -116,18 +116,6 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
             <ResultCard :result="message.result" @next="workspace.setDirection('free')" />
           </div>
           <div
-            v-else-if="message.kind === 'direction'"
-            class="max-w-[92%] rounded-[16px] rounded-bl-md border border-brand/15 bg-brand/5 px-4 py-3 shadow-sm sm:max-w-[80%]"
-          >
-            <div class="mb-1.5 flex flex-wrap items-center gap-2">
-              <span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-brand shadow-sm">
-                已选方向 · {{ message.directionLabel }}
-              </span>
-              <span class="text-[10px] text-[#9aa2b4]">点击方向后自动加入对话</span>
-            </div>
-            <p class="text-[13px] leading-relaxed text-[#434c60]">{{ message.text }}</p>
-          </div>
-          <div
             v-else-if="message.kind === 'agent'"
             class="flex max-w-[88%] items-start gap-2.5 rounded-[18px] rounded-bl-md border border-white/80 bg-white/90 px-3.5 py-3 shadow-sm sm:max-w-[80%]"
           >

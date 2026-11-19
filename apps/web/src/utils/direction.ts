@@ -1,4 +1,4 @@
-import type { DirectionKey, DirectionOption, UploadFileState } from '../types'
+import type { DirectionKey, DirectionOption, PromptPreset, UploadFileState } from '../types'
 
 export const DIRECTION_OPTIONS: DirectionOption[] = [
   {
@@ -36,6 +36,69 @@ export const DIRECTION_OPTIONS: DirectionOption[] = [
 export function directionPrompt(key: DirectionKey): string {
   return DIRECTION_OPTIONS.find((item) => item.key === key)?.prompt || ''
 }
+
+export const BUILTIN_PROMPTS: PromptPreset[] = [
+  {
+    id: 'builtin-weekly-progress',
+    label: '进展与卡点',
+    text: '把这段时间的对话整理成复盘：进展、卡点、判断变化，以及下一步可以先做什么。',
+    direction: 'weekly',
+  },
+  {
+    id: 'builtin-weekly-actions',
+    label: '行动清单',
+    text: '从对话里提取这周做过的事和还没完成的行动项，按优先级排好。',
+    direction: 'weekly',
+  },
+  {
+    id: 'builtin-project-flow',
+    label: '项目来龙去脉',
+    text: '梳理这个项目的背景、关键决策、实际结果和遗留问题，帮我看清哪里需要调整。',
+    direction: 'project',
+  },
+  {
+    id: 'builtin-project-risk',
+    label: '风险与取舍',
+    text: '找出这个项目里被忽略的风险，以及当时做取舍的依据。',
+    direction: 'project',
+  },
+  {
+    id: 'builtin-conversation-keys',
+    label: '提炼关键结论',
+    text: '从这段对话里提炼关键结论、当时的判断和后来发生的结果。',
+    direction: 'conversation',
+  },
+  {
+    id: 'builtin-conversation-verify',
+    label: '待验证点',
+    text: '指出这段对话里还没有证据支撑、需要继续验证的判断。',
+    direction: 'conversation',
+  },
+  {
+    id: 'builtin-growth-profile',
+    label: '更新画像',
+    text: '根据这些对话更新我的关注方向、思考习惯和正在出现的成长信号。',
+    direction: 'growth',
+  },
+  {
+    id: 'builtin-growth-pitfalls',
+    label: '反复踩的坑',
+    text: '总结我在这段对话里反复遇到的问题，以及可以尝试的改进方式。',
+    direction: 'growth',
+  },
+  {
+    id: 'builtin-free-evidence',
+    label: '基于证据回答',
+    text: '直接回答我的问题，尽量引用对话里的依据；证据不够时明确告诉我。',
+    direction: 'free',
+  },
+  {
+    id: 'builtin-free-angle',
+    label: '换个角度',
+    text: '换一个角度重新审视这个问题，给我不同的思路。',
+    direction: 'free',
+  },
+]
 
 export const DIRECTION_LABELS: Record<DirectionKey, string> = {
   weekly: '本周复盘',

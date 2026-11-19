@@ -6,16 +6,36 @@ import type {
   ConversationMessage,
   DirectionKey,
   ModelSelection,
+  PromptPreset,
   QuickModelOption,
   TaskStage,
   UploadFileState,
 } from '../types'
 import { friendlyError, friendlyFileError, friendlyFileSizeError, friendlyStage } from '../utils/friendly'
 import { normalizeAgentResult } from '../utils/review'
-import { DIRECTION_LABELS, directionPrompt, recommendDirection } from '../utils/direction'
+import { BUILTIN_PROMPTS, recommendDirection } from '../utils/direction'
 
 const MAX_FILES = 10
 const MAX_FILE_SIZE = 10 * 1024 * 1024
+const PROMPT_STORAGE_KEY = 'cairn_saved_prompts'
+const MAX_SELECTED_PROMPTS = 3
+
+function readSavedPrompts(): PromptPreset[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PROMPT_STORAGE_KEY) || '[]')
+    if (!Array.isArray(raw)) return []
+    return raw.filter(
+      (item): item is PromptPreset =>
+        Boolean(item) &&
+        typeof item.id === 'string' &&
+        typeof item.label === 'string' &&
+        typeof item.text === 'string' &&
+        typeof item.direction === 'string',
+    )
+  } catch {
+    return []
+  }
+}
 
 const DEFAULT_MODEL: ModelSelection = {
   providerLabel: '深度求索',
@@ -35,6 +55,8 @@ const state = reactive({
   files: [] as UploadFileState[],
   direction: 'free' as DirectionKey,
   customDirection: '',
+  savedPrompts: readSavedPrompts(),
+  selectedPromptIds: [] as string[],
   recommendReason: '',
   input: '',
   model: { ...DEFAULT_MODEL } as ModelSelection,
@@ -48,6 +70,13 @@ const state = reactive({
   notice: '',
   noticeKind: 'info' as 'info' | 'error' | 'success',
 })
+
+const availablePrompts = computed(() => [...BUILTIN_PROMPTS, ...state.savedPrompts])
+const selectedPrompts = computed(() =>
+  state.selectedPromptIds
+    .map((id) => availablePrompts.value.find((item) => item.id === id))
+    .filter((item): item is PromptPreset => Boolean(item)),
+)
 
 let activeStreamTask = ''
 let confirmedTask = ''
@@ -101,6 +130,8 @@ function resetModelTempKeyAfterTask(): void {
 
 export const workspace = {
   state,
+  selectedPrompts,
+  availablePrompts,
 
   hasStarted: computed(() => state.messages.length > 0),
 
@@ -122,16 +153,50 @@ export const workspace = {
     state.recommendReason = ''
   },
 
-  chooseDirection(key: DirectionKey): void {
-    if (state.direction === key && !state.customDirection) return
-    state.direction = key
-    state.customDirection = ''
-    state.recommendReason = ''
-    pushMessage('助手', directionPrompt(key), {
-      kind: 'direction',
-      directionKey: key,
-      directionLabel: DIRECTION_LABELS[key],
-    })
+  togglePrompt(id: string): void {
+    const index = state.selectedPromptIds.indexOf(id)
+    if (index >= 0) {
+      state.selectedPromptIds.splice(index, 1)
+      return
+    }
+    if (state.selectedPromptIds.length >= MAX_SELECTED_PROMPTS) {
+      notify('一次带上三条提示词就够了，先取消一条再选', 'error')
+      return
+    }
+    const prompt = availablePrompts.value.find((item) => item.id === id)
+    if (!prompt) return
+    state.selectedPromptIds.push(id)
+    if (!state.customDirection) state.direction = prompt.direction
+  },
+
+  addPrompt(label: string, text: string, direction: DirectionKey): void {
+    const cleanLabel = label.trim()
+    const cleanText = text.trim()
+    if (!cleanLabel || !cleanText) {
+      notify('给提示词起个名字，再写清楚想让我做什么', 'error')
+      return
+    }
+    const preset: PromptPreset = {
+      id: `custom-${Date.now().toString(36)}`,
+      label: cleanLabel,
+      text: cleanText,
+      direction,
+      custom: true,
+    }
+    state.savedPrompts.push(preset)
+    localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(state.savedPrompts))
+    state.selectedPromptIds.push(preset.id)
+    notify('这条提示词已经长期保存', 'success')
+  },
+
+  removePrompt(id: string): void {
+    state.savedPrompts = state.savedPrompts.filter((item) => item.id !== id)
+    state.selectedPromptIds = state.selectedPromptIds.filter((item) => item !== id)
+    localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(state.savedPrompts))
+  },
+
+  clearSelectedPrompts(): void {
+    state.selectedPromptIds.splice(0)
   },
 
   setCustomDirection(text: string): void {
@@ -228,7 +293,13 @@ export const workspace = {
       const response = await workspaceApi.createTask({
         message: text,
         direction: state.direction,
-        customDirection: state.customDirection,
+        customDirection: [
+          ...selectedPrompts.value.map((item) => item.text),
+          state.customDirection,
+        ]
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .join('\n'),
         files: state.files.map((file) => ({
           name: file.name,
           size: file.size,
