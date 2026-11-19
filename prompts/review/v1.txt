@@ -49,3 +49,6 @@
 3. 尚未有结果的决策必须标 UNVERIFIED，actual_outcome 写“尚未观察到结果”。
 4. action_items 只出 2 到 3 条，每条必须有 verification。
 5. 不输出 Markdown 代码块，不输出解释文字，只输出 JSON。
+6. 所有给用户看的文字（comparison_with_last_period、background、my_judgment、actual_outcome、reason、old_belief、new_belief、content、verification）必须是自然中文，禁止出现 period、period=、fragment_id、evidence_fragment_ids、outcome_status、UNVERIFIED、CORRECT 等内部标识或英文枚举。未验证的结果只写“尚未观察到结果”。
+7. domain_distribution 的 domain 和 investment_distribution 的 topic 必须写成简短中文主题，禁止输出原始英文枚举、斜杠编码或系统内部标签。
+8. 没有上一周期数据时，comparison_with_last_period 只写“这是第一段记录，暂时没有上一周期可以对比”，不要写周期编号或样本统计。

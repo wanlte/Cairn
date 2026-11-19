@@ -254,6 +254,23 @@ async def test_export_hides_technical_fields(monkeypatch):
         assert hidden not in text
 
 
+def test_review_display_text_hides_internal_markers():
+    from apps.api.review.service import _friendly_comparison, _friendly_text
+
+    raw_comparison = (
+        "无上一周期数据（本周期为首轮，period=ws-task-8494520-r0），"
+        "当前全部 outcome_status=UNVERIFIED，样本量不足。"
+    )
+    cleaned_comparison = _friendly_comparison(raw_comparison)
+    assert "period=" not in cleaned_comparison
+    assert "outcome_status" not in cleaned_comparison
+    assert "第一段记录" in cleaned_comparison
+
+    assert "period=" not in _friendly_text("当时判断 period=ws-task-abc")
+    assert "outcome_status" not in _friendly_text("尚未观察到 outcome_status=UNVERIFIED")
+    assert _friendly_text("先把验证口径定下来再改") == "先把验证口径定下来再改"
+
+
 async def test_profile_markdown_export(client, monkeypatch):
     headers = await auth_headers(client, "m9-profile@x.com")
     fragment_ids = await create_fragments(client, headers, monkeypatch)

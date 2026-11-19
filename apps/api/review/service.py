@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,33 @@ def _error_code(exc: Exception) -> str:
     if isinstance(exc, AppError):
         return exc.code
     return exc.__class__.__name__
+
+
+_TECHNICAL_TEXT_RE = re.compile(
+    r"period\s*=|outcome_status|evidence_fragment_ids|fragment_ids?\b", re.IGNORECASE
+)
+
+
+def _has_technical_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(_TECHNICAL_TEXT_RE.search(value))
+
+
+def _friendly_text(value: Any) -> Any:
+    """兜底清掉模型偶尔带进用户文案里的内部标识。"""
+    if not isinstance(value, str) or not _has_technical_text(value):
+        return value
+    cleaned = re.sub(r"period\s*=\s*[^\s,，;；）)]+", "这一周期", value, flags=re.IGNORECASE)
+    cleaned = re.sub(r"outcome_status\s*=\s*[\w]+", "结果还没观察到", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"evidence_fragment_ids|fragment_ids?\b", "", cleaned, flags=re.IGNORECASE)
+    return re.sub(r"[ \t]{2,}", " ", cleaned).strip(" ，,;；")
+
+
+def _friendly_comparison(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    if _has_technical_text(value):
+        return "这是第一段记录，暂时没有上一周期可以对比，后面多记几次就能看出变化。"
+    return value.strip()
 
 
 class ReviewService:
@@ -112,7 +140,7 @@ class ReviewService:
             for item in fragments
         ]
         user_payload: dict[str, Any] = {
-            "period": request.period,
+            "period_label": "本次复盘",
             "fragments": fragment_payload,
         }
         if request.direction:
@@ -260,12 +288,17 @@ class ReviewService:
                 .order_by(ActionItem.id)
             )
         ).scalars().all()
+        overview = dict(report.overview_json or {})
+        if "comparison_with_last_period" in overview:
+            overview["comparison_with_last_period"] = _friendly_comparison(
+                overview.get("comparison_with_last_period")
+            )
         return ReviewReportResponse(
             id=report.id,
             user_id=report.user_id,
             period=report.period,
             status=report.status,
-            overview=report.overview_json,
+            overview=overview,
             prompt_version=report.prompt_version,
             model=report.model,
             provider=report.provider,
@@ -279,7 +312,10 @@ class ReviewService:
                     attribution=item.attribution,
                     fragment_id=item.fragment_id,
                     evidence_fragment_ids=item.evidence_fragment_ids,
-                    payload=item.payload_json,
+                    payload={
+                        key: _friendly_text(value)
+                        for key, value in (item.payload_json or {}).items()
+                    },
                     feedback=item.feedback_json,
                 )
                 for item in items
@@ -334,7 +370,10 @@ class ReviewService:
             attribution=item.attribution,
             fragment_id=item.fragment_id,
             evidence_fragment_ids=item.evidence_fragment_ids,
-            payload=item.payload_json,
+            payload={
+                key: _friendly_text(value)
+                for key, value in (item.payload_json or {}).items()
+            },
             feedback=item.feedback_json,
         )
 
