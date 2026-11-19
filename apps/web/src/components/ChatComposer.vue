@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { ArrowUp, Sparkles } from 'lucide-vue-next'
 import FileDropzone from './FileDropzone.vue'
+import DirectionPicker from './DirectionPicker.vue'
 import { workspace } from '../stores/workspace'
 
 const input = computed({
@@ -27,7 +28,10 @@ function onKeydown(event: KeyboardEvent): void {
     class="composer group relative rounded-[24px] bg-white/90 border transition-all duration-200"
     :class="focused ? 'border-brand/50 shadow-glow' : 'border-white/80 shadow-soft'"
   >
-    <div class="flex items-start gap-3 px-5 pt-4">
+    <div class="border-b border-[#eef0f6] px-5 pb-3 pt-4">
+      <DirectionPicker />
+    </div>
+    <div class="flex items-start gap-3 px-5 pt-3">
       <div class="mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-teal text-white">
         <Sparkles :size="16" />
       </div>

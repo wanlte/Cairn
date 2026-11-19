@@ -229,11 +229,13 @@ export interface ConversationMessage {
   role: '用户' | '助手' | AgentRoleLabel
   text: string
   createdAt: string
-  kind?: 'text' | 'result' | 'file' | 'agent'
+  kind?: 'text' | 'result' | 'file' | 'agent' | 'direction'
   fileUids?: string[]
   bubbleId?: string
   agentState?: '进行中' | '完成' | '需要确认'
   result?: AgentResult
+  directionKey?: DirectionKey
+  directionLabel?: string
 }
 
 export interface AgentBubble {
@@ -266,6 +268,7 @@ export interface DirectionOption {
   key: DirectionKey
   label: string
   description: string
+  prompt: string
 }
 
 export interface QuickSavedCredential {

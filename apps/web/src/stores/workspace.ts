@@ -12,7 +12,7 @@ import type {
 } from '../types'
 import { friendlyError, friendlyFileError, friendlyFileSizeError, friendlyStage } from '../utils/friendly'
 import { normalizeAgentResult } from '../utils/review'
-import { recommendDirection } from '../utils/direction'
+import { DIRECTION_LABELS, directionPrompt, recommendDirection } from '../utils/direction'
 
 const MAX_FILES = 10
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -120,6 +120,18 @@ export const workspace = {
   setDirection(key: DirectionKey): void {
     state.direction = key
     state.recommendReason = ''
+  },
+
+  chooseDirection(key: DirectionKey): void {
+    if (state.direction === key && !state.customDirection) return
+    state.direction = key
+    state.customDirection = ''
+    state.recommendReason = ''
+    pushMessage('助手', directionPrompt(key), {
+      kind: 'direction',
+      directionKey: key,
+      directionLabel: DIRECTION_LABELS[key],
+    })
   },
 
   setCustomDirection(text: string): void {
