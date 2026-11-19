@@ -26,6 +26,12 @@ function saveCustom(): void {
   workspace.addPrompt(newLabel.value, newText.value, workspace.state.direction)
   newLabel.value = ''
   newText.value = ''
+  open.value = false
+}
+
+function selectPrompt(id: string): void {
+  workspace.togglePrompt(id)
+  open.value = false
 }
 
 function onDocumentClick(event: MouseEvent): void {
@@ -101,7 +107,7 @@ function choose(key: DirectionKey): void {
             ? 'border-brand/30 bg-brand/5'
             : 'border-[#eef0f6] hover:border-brand/25 hover:bg-[#fafbff]'"
         >
-          <button type="button" class="flex min-w-0 flex-1 items-start gap-2 text-left" @click="workspace.togglePrompt(prompt.id)">
+          <button type="button" class="flex min-w-0 flex-1 items-start gap-2 text-left" @click="selectPrompt(prompt.id)">
             <span
               class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
               :class="isSelected(prompt.id) ? 'border-brand bg-brand text-white' : 'border-[#cfd5e2]'"
