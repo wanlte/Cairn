@@ -25,6 +25,7 @@ const providerLabels: Record<string, ProviderLabel> = {
 }
 
 const friendlyErrors: Array<[RegExp, string]> = [
+  [/invalid_token|token_expired|unauthor|401/i, '登录状态失效了，重新登录就好'],
   [/credential/i, '模型还没配置好，选一个模型就能继续'],
   [/connect|timeout|network|econn/i, '模型暂时无法连接，请检查配置后重试'],
   [/unauthor|401|forbidden|403|key/i, '这个密钥好像不太对，换一个再试试'],
@@ -72,6 +73,7 @@ export function friendlyError(err: unknown): string {
     for (const [pattern, message] of friendlyErrors) {
       if (pattern.test(code)) return message
     }
+    if (err.status === 401) return '登录状态失效了，重新登录就好'
     if (err.status === 400) return '提交的内容有点问题，检查一下再试'
     if (err.status >= 500) return '服务开小差了，稍后再试一次'
   }

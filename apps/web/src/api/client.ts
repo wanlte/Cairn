@@ -29,6 +29,15 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+function handleUnauthorized(status: number): void {
+  if (status !== 401) return
+  localStorage.removeItem('cairn_token')
+  localStorage.removeItem('cairn_email')
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.assign('/login')
+  }
+}
+
 async function parseBody(response: Response): Promise<any> {
   const text = await response.text()
   if (!text) return null
@@ -56,6 +65,7 @@ async function request<T>(
   })
   const payload = await parseBody(response)
   if (!response.ok) {
+    handleUnauthorized(response.status)
     throw new ApiError(response.status, payload as ApiErrorBody | null)
   }
   return payload as T
@@ -69,6 +79,7 @@ export const api = {
     })
     if (!response.ok) {
       const payload = await parseBody(response)
+      handleUnauthorized(response.status)
       throw new ApiError(response.status, payload as ApiErrorBody | null)
     }
     return response.text()
@@ -89,6 +100,7 @@ export const api = {
     })
     if (!response.ok) {
       const payload = await parseBody(response)
+      handleUnauthorized(response.status)
       throw new ApiError(response.status, payload as ApiErrorBody | null)
     }
     if (!response.body) throw new Error('浏览器不支持流式响应')
