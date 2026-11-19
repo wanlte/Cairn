@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { BookOpen, Check, Download, History, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-vue-next'
 import { api, ApiError } from '../api/client'
+import { workspace } from '../stores/workspace'
 import { friendlyError } from '../utils/friendly'
 import type { ProfileClaim, ProfileDiff, ProfileSnapshot } from '../types'
 
@@ -12,6 +14,9 @@ const DIMENSIONS: Array<{ key: string; label: string; hint: string }> = [
   { key: 'high_frequency_pitfalls', label: '常见坑', hint: '容易反复遇到的坎' },
   { key: 'growth_signals', label: '成长信号', hint: '正在变好的地方' },
 ]
+
+const route = useRoute()
+const router = useRouter()
 
 const current = ref<ProfileSnapshot | null>(null)
 const snapshots = ref<ProfileSnapshot[]>([])
@@ -50,13 +55,32 @@ async function load(): Promise<void> {
     current.value = null
   }
 }
-onMounted(load)
+onMounted(async () => {
+  await load()
+  if (route.query.generate === '1') {
+    await router.replace({ query: {} })
+    await refresh()
+  }
+})
+
+function nextPeriod(): string {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `p-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}-${Math.random().toString(36).slice(2, 5)}`
+}
 
 async function refresh(): Promise<void> {
   busy.value = true
   error.value = ''
   try {
-    const fresh = await api.post<ProfileSnapshot>('/profile/generate', {})
+    const model = workspace.state.model
+    const fresh = await api.post<ProfileSnapshot>('/profile/generate', {
+      period: nextPeriod(),
+      provider: model.provider,
+      model: model.model,
+      credential_id: model.credentialId,
+      ...(model.temporaryKey ? { temporary_api_key: model.temporaryKey } : {}),
+    })
     if (fresh.status === 'FAILED') {
       error.value = '画像这次没能更新，稍后再试一次'
     } else {

@@ -78,6 +78,14 @@ function openReport(): void {
   if (props.result.report_id == null) return
   router.push({ name: 'report-detail', params: { id: props.result.report_id } })
 }
+
+function handleNext(): void {
+  if (props.result.kind === '复盘' && props.result.next_label === '更新画像') {
+    router.push({ name: 'profile', query: { generate: '1' } })
+    return
+  }
+  emit('next')
+}
 </script>
 
 <template>
@@ -215,7 +223,7 @@ function openReport(): void {
           v-if="result.next_label"
           type="button"
           class="inline-flex items-center gap-1.5 rounded-full bg-brand/5 px-4 py-2 text-[13px] font-semibold text-brand transition-colors hover:bg-brand/10"
-          @click="emit('next')"
+          @click="handleNext"
         >
           {{ result.next_label }} <ArrowRight :size="14" />
         </button>

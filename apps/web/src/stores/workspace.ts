@@ -13,7 +13,7 @@ import type {
 } from '../types'
 import { friendlyError, friendlyFileError, friendlyFileSizeError, friendlyStage } from '../utils/friendly'
 import { normalizeAgentResult } from '../utils/review'
-import { BUILTIN_PROMPTS, recommendDirection } from '../utils/direction'
+import { BUILTIN_PROMPTS, DIRECTION_LABELS, recommendDirection } from '../utils/direction'
 
 const MAX_FILES = 10
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -286,7 +286,7 @@ export const workspace = {
     state.confirmPrompt = ''
     resetPlayback()
     pushMessage('用户', text || '帮我看看这些对话')
-    pushMessage('助手', '收到，我来帮你看看')
+    pushMessage('助手', workingText(), { kind: 'working' })
     state.input = ''
 
     try {
@@ -312,8 +312,11 @@ export const workspace = {
       state.taskId = response.task_id
       state.stage = friendlyStage(response.stage)
       state.recommendReason = response.recommend_reason || state.recommendReason
-      workspaceApi.events(response.task_id, handleEvent).catch(() => undefined)
+      workspaceApi.events(response.task_id, handleEvent).catch(() => {
+        state.messages = state.messages.filter((item) => item.kind !== 'working')
+      })
     } catch (err) {
+      state.messages = state.messages.filter((item) => item.kind !== 'working')
       state.stage = '遇到问题'
       notify(friendlyError(err), 'error')
       pushMessage('助手', friendlyError(err))
@@ -357,6 +360,13 @@ export const workspace = {
     state.stage = '等待中'
     state.taskId = ''
   },
+}
+
+function workingText(): string {
+  const label = DIRECTION_LABELS[state.direction]
+  if (state.direction === 'growth') return '正在根据你提供的对话更新成长画像…'
+  if (state.direction === 'free') return '正在理解你的问题，并去对话里找依据…'
+  return `正在按「${label}」梳理对话，几位小伙伴要忙一会儿…`
 }
 
 function recommend(): void {
@@ -412,6 +422,9 @@ function showResult(raw: AgentResult | null | undefined): void {
 
 function applyEvent(event: import('../api/client').WorkspaceEvent): void {
   if (confirmedTask && state.taskId === confirmedTask) return
+  if (state.messages.some((item) => item.kind === 'working')) {
+    state.messages = state.messages.filter((item) => item.kind !== 'working')
+  }
   if (event.stage) state.stage = friendlyStage(event.stage)
   if (event.bubble) {
     const existing = state.bubbles.find((item) => item.id === event.bubble!.id)

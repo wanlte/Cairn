@@ -116,6 +116,13 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
             <ResultCard :result="message.result" @next="workspace.setDirection('free')" />
           </div>
           <div
+            v-else-if="message.kind === 'working'"
+            class="flex items-center gap-2 rounded-[14px] border border-brand/10 bg-white/80 px-4 py-3 text-[13px] text-[#5b6478] shadow-sm animate-fade-up"
+          >
+            <LoaderCircle :size="14" class="shrink-0 animate-spin text-brand" />
+            {{ message.text }}
+          </div>
+          <div
             v-else-if="message.kind === 'agent'"
             class="flex max-w-[88%] items-start gap-2.5 rounded-[18px] rounded-bl-md border border-white/80 bg-white/90 px-3.5 py-3 shadow-sm sm:max-w-[80%]"
           >

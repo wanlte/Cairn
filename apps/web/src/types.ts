@@ -229,7 +229,7 @@ export interface ConversationMessage {
   role: '用户' | '助手' | AgentRoleLabel
   text: string
   createdAt: string
-  kind?: 'text' | 'result' | 'file' | 'agent' | 'direction'
+  kind?: 'text' | 'result' | 'file' | 'agent' | 'working' | 'direction'
   fileUids?: string[]
   bubbleId?: string
   agentState?: '进行中' | '完成' | '需要确认'
