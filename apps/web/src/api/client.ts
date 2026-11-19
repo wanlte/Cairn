@@ -2,13 +2,30 @@ import type {
   AgentBubble,
   AgentResult,
   ApiErrorBody,
+  ConversationSummary,
+  Coverage,
+  CounterfactualEntry,
+  DailyQuestion,
+  DecisionResult,
   DirectionKey,
+  ExportResult,
+  PairAnalysisResult,
+  IngestionPreview,
   ModelSelection,
+  PlanResponse,
   QuickModelOption,
   ReviewItem,
   ReviewReport,
   ActionItemRecord,
+  AppealRecord,
+  DesirabilityFlag,
+  DriftCurve,
+  EvidenceChain,
+  RelationGraph,
+  SimulationResult,
   TaskStage,
+  TimelineResponse,
+  WeeklyFill,
 } from '../types'
 
 const BASE = '/api/v1'
@@ -194,4 +211,140 @@ export const reviewApi = {
 
   feedback: (itemId: number, decision: 'AGREE' | 'DISAGREE') =>
     api.post<ReviewItem>(`/reviews/items/${itemId}/feedback`, { decision }),
+}
+
+export interface IngestPreviewPayload {
+  source_type: string
+  text?: string
+  base64?: string
+  filename?: string
+}
+
+export interface IngestCommitResult {
+  conversation_id: number
+  turn_count: number
+  duplicate: boolean
+}
+
+export const ingestionApi = {
+  preview: (payload: IngestPreviewPayload) =>
+    api.post<IngestionPreview>('/ingestion/preview', payload),
+
+  commit: (previewId: string) =>
+    api.post<IngestCommitResult>('/ingestion/commit', {
+      preview_id: previewId,
+      corrections: [],
+    }),
+
+  conversations: () => api.get<{ items: ConversationSummary[] }>('/ingestion/conversations'),
+}
+
+export interface CounterfactualPayload {
+  prompt_type: string
+  content: string
+  source_label?: string
+}
+
+export const samplesApi = {
+  coverage: () => api.get<Coverage>('/samples/coverage'),
+
+  listCounterfactuals: () => api.get<CounterfactualEntry[]>('/samples/counterfactuals'),
+
+  addCounterfactual: (payload: CounterfactualPayload) =>
+    api.post<CounterfactualEntry>('/samples/counterfactuals', payload),
+
+  deleteCounterfactual: (entryId: number) =>
+    api.delete(`/samples/counterfactuals/${entryId}`),
+}
+
+export const timelineApi = {
+  events: (eventTypes?: string[], limit = 200) => {
+    const query = new URLSearchParams()
+    eventTypes?.forEach((type) => query.append('event_types', type))
+    query.set('limit', String(limit))
+    return api.get<TimelineResponse>(`/timeline/events?${query.toString()}`)
+  },
+}
+
+export const analysisApi = {
+  desirability: () => api.get<DesirabilityFlag[]>('/analysis/desirability'),
+
+  evidenceChain: (itemId: number) =>
+    api.get<EvidenceChain>(`/analysis/evidence-chain/${itemId}`),
+
+  submitAppeal: (itemId: number, reason: string) =>
+    api.post<AppealRecord>(`/analysis/appeals?item_id=${itemId}`, { reason }),
+
+  listAppeals: () => api.get<AppealRecord[]>('/analysis/appeals'),
+
+  resolveAppeal: (appealId: number, decision: 'ACCEPTED' | 'REJECTED', note?: string) =>
+    api.post<AppealRecord>(`/analysis/appeals/${appealId}/resolve`, { decision, note }),
+}
+
+export const insightsApi = {
+  drift: (group?: string) =>
+    api.get<DriftCurve>(`/insights/drift${group ? `?group=${encodeURIComponent(group)}` : ''}`),
+
+  graph: () => api.get<RelationGraph>('/insights/graph'),
+
+  rebuildGraph: () => api.post<{ edges: number }>('/insights/graph/rebuild'),
+}
+
+export interface PlanGeneratePayload {
+  goal: string
+  provider?: string | null
+  model?: string | null
+  credential_id?: number | null
+  temporary_api_key?: string | null
+}
+
+export interface WeeklyFillPayload {
+  week: string
+  done: string
+  blocked: string
+  learning: string
+}
+
+export const planningApi = {
+  current: () => api.get<PlanResponse>('/plans/current'),
+
+  list: () => api.get<PlanResponse[]>('/plans'),
+
+  generate: (payload: PlanGeneratePayload) =>
+    api.post<PlanResponse>('/plans/generate', payload),
+
+  fillWeekly: (blueprintId: number, payload: WeeklyFillPayload) =>
+    api.post<WeeklyFill>(`/plans/${blueprintId}/weekly`, payload),
+}
+
+export interface ExtensionPayload {
+  scenario?: string
+  choice?: string
+  question?: string
+  pair_id?: number
+  provider?: string | null
+  model?: string | null
+  credential_id?: number | null
+  temporary_api_key?: string | null
+}
+
+export const extensionsApi = {
+  simulate: (payload: ExtensionPayload) =>
+    api.post<SimulationResult>('/extensions/simulate', payload),
+
+  decide: (payload: ExtensionPayload) =>
+    api.post<DecisionResult>('/extensions/decide', payload),
+
+  daily: () => api.get<DailyQuestion>('/extensions/daily'),
+
+  answerDaily: (questionId: number, answer: string) =>
+    api.post<DailyQuestion>(`/extensions/daily/${questionId}/answer`, { answer }),
+
+  pairAnalysis: (payload: ExtensionPayload) =>
+    api.post<PairAnalysisResult>('/extensions/pair-analysis', payload),
+}
+
+export const exportsApi = {
+  get: (kind: string, format: 'json' | 'md' | 'html') =>
+    api.get<ExportResult>(`/exports/${kind}?format=${format}`),
 }

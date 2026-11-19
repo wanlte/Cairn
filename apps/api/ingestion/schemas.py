@@ -10,6 +10,18 @@ class SourceType(str, Enum):
     MARKDOWN = "markdown"
     TEXT = "text"
     DEEPSEEK_ARCHIVE = "deepseek_archive"
+    WECHAT = "wechat"
+    FEISHU = "feishu"
+    EMAIL = "email"
+    VOICE = "voice"
+    DIARY = "diary"
+
+
+SINGLE_ROLE_SOURCES = {
+    SourceType.EMAIL,
+    SourceType.VOICE,
+    SourceType.DIARY,
+}
 
 
 class Role(str, Enum):

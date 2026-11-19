@@ -75,6 +75,40 @@ export interface ReviewItem {
   evidence_fragment_ids: number[]
   payload: Record<string, unknown>
   feedback: { decision?: string; note?: string | null } | null
+  confidence_low?: number | null
+  confidence_high?: number | null
+  reasoning_chain?: string[]
+  conflicts_with?: number[]
+  appeal_status?: string
+}
+
+export interface AppealRecord {
+  id: number
+  item_id: number
+  reason: string
+  status: string
+  resolution_note: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface DesirabilityFlag {
+  fragment_id: number
+  score: number
+  signals: string[]
+  summary: string
+}
+
+export interface EvidenceChain {
+  item_id: number
+  section: string
+  conclusion: string
+  reasoning_chain: string[]
+  confidence_low: number | null
+  confidence_high: number | null
+  conflicts_with: number[]
+  appeal_status: string
+  evidence: { fragment_id: number; kind: string | null; payload: Record<string, unknown> }[]
 }
 
 export interface ReviewDistributionEntry {
@@ -291,4 +325,153 @@ export interface QuickModelOption {
   model: string | null
   fromEnvironment: boolean
   saved: QuickSavedCredential[]
+}
+
+export interface Coverage {
+  score: number
+  level: string
+  low_confidence: boolean
+  span_days: number
+  scenarios: number
+  emotion_density: number
+  sources: number
+  counterfactuals: number
+  reasons: string[]
+  summary: string
+}
+
+export interface CounterfactualEntry {
+  id: number
+  prompt_type: string
+  content: string
+  source_label: string | null
+  created_at: string
+}
+
+export interface TimelineEvent {
+  id: string
+  event_type: string
+  occurred_at: string | null
+  time_precision: string
+  title: string
+  summary: string
+  source_type: string | null
+  ref_id: number
+  low_confidence: boolean
+}
+
+export interface TimelineResponse {
+  items: TimelineEvent[]
+  total: number
+  span_days: number
+  low_precision_count: number
+}
+
+export interface DriftClaim {
+  key: string
+  value: string
+  group: string
+}
+
+export interface DriftPoint {
+  snapshot_id: number
+  period: string
+  created_at: string
+  claims: DriftClaim[]
+  triggers: Record<string, number>
+}
+
+export interface DriftCurve {
+  points: DriftPoint[]
+  total_snapshots: number
+}
+
+export interface GraphNode {
+  id: string
+  label: string
+  kind: string
+  weight: number
+}
+
+export interface GraphEdge {
+  source: string
+  target: string
+  kind: string
+  weight: number
+}
+
+export interface RelationGraph {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+}
+
+export interface WeeklyFill {
+  id: number
+  blueprint_id: number
+  week: string
+  done: string
+  blocked: string
+  learning: string
+  created_at: string
+}
+
+export interface PlanPayload {
+  feasibility?: { assumption: string; evidence: string; risk: string; verdict: string }
+  premortem?: { scenario: string; signal: string; countermeasure: string }[]
+  two_minute?: string
+  if_then?: { condition: string; action: string }[]
+  conflicts?: { goal_a: string; goal_b: string; reason: string }[]
+  attribution?: { layer: string; explanation: string }[]
+}
+
+export interface PlanResponse {
+  id: number
+  user_id: number
+  goal: string
+  status: string
+  payload: PlanPayload
+  coverage: Record<string, unknown>
+  prompt_version: string
+  model: string | null
+  provider: string | null
+  created_at: string
+  weekly_fills: WeeklyFill[]
+}
+
+export interface SimulationResult {
+  id: number
+  scenario: string
+  choice: string
+  payload: {
+    paths?: { choice: string; outcome: string; signal: string }[]
+    advice?: string
+  }
+  created_at: string
+}
+
+export interface DecisionResult {
+  suggestion: string
+  reasons: string[]
+  first_step: string
+}
+
+export interface DailyQuestion {
+  id: number
+  day: string
+  question: string
+  answer: string
+  created_at: string
+}
+
+export interface PairAnalysisResult {
+  pair_id: number
+  summary: string
+  mismatches: { situation: string; you: string; them: string; repair: string }[]
+}
+
+export interface ExportResult {
+  kind: string
+  format: string
+  filename: string
+  content: string
 }

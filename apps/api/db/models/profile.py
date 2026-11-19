@@ -33,6 +33,7 @@ class ProfileSnapshot(Base):
     period: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     previous_snapshot_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    coverage_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     provider: Mapped[str | None] = mapped_column(String(32), nullable=True)

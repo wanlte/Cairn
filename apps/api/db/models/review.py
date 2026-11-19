@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -32,6 +33,7 @@ class ReviewReport(Base):
     period: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     overview_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    coverage_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -62,6 +64,11 @@ class ReviewItem(Base):
     )
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     feedback_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    confidence_low: Mapped[Any | None] = mapped_column(Numeric(5, 4), nullable=True)
+    confidence_high: Mapped[Any | None] = mapped_column(Numeric(5, 4), nullable=True)
+    reasoning_chain_json: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    conflict_with_json: Mapped[list[Any]] = mapped_column(JSON, default=list, nullable=False)
+    appeal_status: Mapped[str] = mapped_column(String(16), default="NONE", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

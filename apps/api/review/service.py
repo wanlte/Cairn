@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from apps.api.analysis.service import analysis_service
 from apps.api.config import get_settings
 from apps.api.db.models.extraction import Fragment
 from apps.api.db.models.review import ActionItem, ReviewItem, ReviewReport
@@ -32,6 +33,7 @@ from apps.api.review.schemas import (
     ReviewOutput,
     ReviewReportResponse,
 )
+from apps.api.samples.coverage import sample_coverage
 
 PROMPT_VERSION = "review-v1"
 _PROMPT_PATH = Path(__file__).resolve().parents[3] / "prompts" / "review" / "v1.txt"
@@ -130,11 +132,16 @@ class ReviewService:
             **request.gateway_kwargs(),
         )
 
+        coverage = await sample_coverage(session, user_id, list(fragments))
+        desirability = await analysis_service.detect_desirability(
+            session, user_id, list(fragments)
+        )
         report = ReviewReport(
             user_id=user_id,
             period=request.period,
             status="RUNNING",
             overview_json={},
+            coverage_json=coverage,
             prompt_version=PROMPT_VERSION,
             model=model,
             provider=provider.value if provider else None,
@@ -169,6 +176,12 @@ class ReviewService:
         }
         if profile_context:
             user_payload["已有画像"] = profile_context
+        user_payload["样本体检"] = coverage
+        if desirability:
+            user_payload["表达提醒"] = [
+                {"fragment_id": item.fragment_id, "痕迹": item.signals}
+                for item in desirability
+            ]
         if request.direction:
             user_payload["direction"] = request.direction
         if request.supplement:
@@ -218,19 +231,37 @@ class ReviewService:
                     payload_json=item.model_dump(mode="json"),
                 )
             )
+        judgment_records: list[ReviewItem] = []
         for item in output.judgments:
-            session.add(
-                ReviewItem(
-                    user_id=user_id,
-                    report_id=report.id,
-                    section="judgment",
-                    fragment_id=item.fragment_id,
-                    verdict=item.verdict.value,
-                    attribution=item.attribution.value,
-                    evidence_fragment_ids=item.evidence_fragment_ids,
-                    payload_json=item.model_dump(mode="json"),
-                )
+            record = ReviewItem(
+                user_id=user_id,
+                report_id=report.id,
+                section="judgment",
+                fragment_id=item.fragment_id,
+                verdict=item.verdict.value,
+                attribution=item.attribution.value,
+                evidence_fragment_ids=item.evidence_fragment_ids,
+                payload_json=item.model_dump(
+                    mode="json",
+                    exclude={"confidence", "reasoning_chain", "conflicts_with"},
+                ),
+                confidence_low=float(item.confidence.low) if item.confidence else None,
+                confidence_high=float(item.confidence.high) if item.confidence else None,
+                reasoning_chain_json=item.reasoning_chain,
+                conflict_with_json=[],
             )
+            session.add(record)
+            judgment_records.append(record)
+        await session.flush()
+        for item, record in zip(output.judgments, judgment_records, strict=True):
+            conflicts = [
+                judgment_records[index].id
+                for index in item.conflicts_with
+                if 0 <= index < len(judgment_records)
+            ]
+            if conflicts:
+                record.conflict_with_json = conflicts
+                flag_modified(record, "conflict_with_json")
         for item in output.cognitive_changes:
             session.add(
                 ReviewItem(
@@ -325,6 +356,7 @@ class ReviewService:
             period=report.period,
             status=report.status,
             overview=overview,
+            coverage=report.coverage_json or {},
             prompt_version=report.prompt_version,
             model=report.model,
             provider=report.provider,
@@ -343,6 +375,15 @@ class ReviewService:
                         for key, value in (item.payload_json or {}).items()
                     },
                     feedback=item.feedback_json,
+                    confidence_low=(
+                        float(item.confidence_low) if item.confidence_low is not None else None
+                    ),
+                    confidence_high=(
+                        float(item.confidence_high) if item.confidence_high is not None else None
+                    ),
+                    reasoning_chain=item.reasoning_chain_json or [],
+                    conflicts_with=item.conflict_with_json or [],
+                    appeal_status=item.appeal_status,
                 )
                 for item in items
             ],
@@ -401,6 +442,11 @@ class ReviewService:
                 for key, value in (item.payload_json or {}).items()
             },
             feedback=item.feedback_json,
+            confidence_low=float(item.confidence_low) if item.confidence_low is not None else None,
+            confidence_high=float(item.confidence_high) if item.confidence_high is not None else None,
+            reasoning_chain=item.reasoning_chain_json or [],
+            conflicts_with=item.conflict_with_json or [],
+            appeal_status=item.appeal_status,
         )
 
     async def list_action_items(

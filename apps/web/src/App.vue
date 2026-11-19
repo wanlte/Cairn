@@ -11,6 +11,8 @@ const router = useRouter()
 const modelOpen = ref(false)
 
 const onHome = computed(() => route.name === 'home')
+const onData = computed(() => route.name === 'data')
+const onLab = computed(() => route.name === 'lab')
 const onReports = computed(() => route.name === 'reports' || route.name === 'report-detail')
 const modelSummary = computed(() => {
   const model = workspace.state.model
@@ -18,7 +20,7 @@ const modelSummary = computed(() => {
   return `${model.providerLabel} · ${mode}`
 })
 
-function go(name: 'home' | 'profile' | 'reports'): void {
+function go(name: 'home' | 'profile' | 'reports' | 'data' | 'lab'): void {
   router.push({ name })
 }
 
@@ -59,6 +61,22 @@ function logout(): void {
             @click="go('profile')"
           >
             画像
+          </button>
+          <button
+            type="button"
+            class="rounded-full px-5 py-1.5 text-[13px] font-semibold transition-all duration-200"
+            :class="onData ? 'bg-white text-brand shadow-sm' : 'text-[#7a839a] hover:text-ink'"
+            @click="go('data')"
+          >
+            数据
+          </button>
+          <button
+            type="button"
+            class="rounded-full px-5 py-1.5 text-[13px] font-semibold transition-all duration-200"
+            :class="onLab ? 'bg-white text-brand shadow-sm' : 'text-[#7a839a] hover:text-ink'"
+            @click="go('lab')"
+          >
+            实验室
           </button>
           <button
             type="button"

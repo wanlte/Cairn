@@ -15,20 +15,16 @@ import {
   LoaderCircle,
   RotateCcw,
   Sparkles,
-  ThumbsDown,
-  ThumbsUp,
 } from 'lucide-vue-next'
 import { reviewApi } from '../api/client'
+import JudgmentCard from '../components/JudgmentCard.vue'
 import type { ActionItemRecord, ReviewItem, ReviewReport } from '../types'
 import {
   actionStatusTone,
   friendlyActionStatus,
-  friendlyAttribution,
   friendlyDate,
   friendlyError,
   friendlyReportStatus,
-  friendlyVerdict,
-  verdictTone,
 } from '../utils/friendly'
 import {
   comparisonText,
@@ -363,30 +359,13 @@ async function exportReport(): Promise<void> {
               <h3 class="mb-1 text-[15px] font-semibold text-ink">判断与原因</h3>
               <p class="mb-4 text-[12px] text-[#9aa2b4]">这些判断准不准，你可以直接标一下</p>
               <div v-if="judgments.length" class="space-y-2.5">
-                <article v-for="item in judgments" :key="item.id" class="rounded-[14px] bg-[#f8fafc] px-4 py-3.5">
-                  <div class="mb-2 flex flex-wrap items-center gap-2">
-                    <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold" :class="verdictTone(item.verdict)">
-                      {{ friendlyVerdict(item.verdict) }}
-                    </span>
-                    <span v-if="friendlyAttribution(item.attribution)" class="text-[11px] text-[#8b93a7]">
-                      {{ friendlyAttribution(item.attribution) }}
-                    </span>
-                  </div>
-                  <p class="text-[13px] leading-relaxed text-[#434c60]">{{ text(item.payload, 'reason') }}</p>
-                  <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <template v-if="!item.feedback?.decision">
-                      <button type="button" class="btn ghost small" :disabled="busyId !== null" @click="giveFeedback(item, 'AGREE')">
-                        <ThumbsUp :size="13" class="mr-1 inline" /> 认同
-                      </button>
-                      <button type="button" class="btn ghost small" :disabled="busyId !== null" @click="giveFeedback(item, 'DISAGREE')">
-                        <ThumbsDown :size="13" class="mr-1 inline" /> 不太对
-                      </button>
-                    </template>
-                    <span v-else class="inline-flex items-center gap-1 text-[11px] font-medium text-[#0f766e]">
-                      <Check :size="12" /> 你标记了「{{ item.feedback.decision === 'AGREE' ? '认同' : '不太对' }}」
-                    </span>
-                  </div>
-                </article>
+                <JudgmentCard
+                  v-for="item in judgments"
+                  :key="item.id"
+                  :item="item"
+                  :busy="busyId !== null"
+                  @feedback="(decision) => giveFeedback(item, decision)"
+                />
               </div>
               <p v-else class="empty">这次没有需要复核的判断。</p>
             </div>

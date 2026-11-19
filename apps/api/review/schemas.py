@@ -58,6 +58,13 @@ class KeyEvent(BaseModel):
     actual_outcome: str
 
 
+class ConfidenceInterval(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    low: float = Field(ge=0, le=1)
+    high: float = Field(ge=0, le=1)
+
+
 class JudgmentItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -66,6 +73,9 @@ class JudgmentItem(BaseModel):
     attribution: Attribution
     reason: str
     evidence_fragment_ids: list[int] = Field(default_factory=list)
+    confidence: ConfidenceInterval | None = None
+    reasoning_chain: list[str] = Field(default_factory=list)
+    conflicts_with: list[int] = Field(default_factory=list)
 
 
 class CognitiveChange(BaseModel):
@@ -192,6 +202,21 @@ REVIEW_JSON_SCHEMA: dict[str, Any] = {
                         "type": "array",
                         "items": {"type": "integer"},
                     },
+                    "confidence": {
+                        "type": "object",
+                        "properties": {
+                            "low": {"type": "number", "minimum": 0, "maximum": 1},
+                            "high": {"type": "number", "minimum": 0, "maximum": 1},
+                        },
+                    },
+                    "reasoning_chain": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "conflicts_with": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                    },
                 },
             },
         },
@@ -254,6 +279,11 @@ class ReviewItemResponse(BaseModel):
     evidence_fragment_ids: list[int]
     payload: dict
     feedback: dict | None = None
+    confidence_low: float | None = None
+    confidence_high: float | None = None
+    reasoning_chain: list[str] = Field(default_factory=list)
+    conflicts_with: list[int] = Field(default_factory=list)
+    appeal_status: str = "NONE"
 
 
 class ActionItemStatus(str, Enum):
@@ -284,6 +314,7 @@ class ReviewReportResponse(BaseModel):
     period: str
     status: str
     overview: dict
+    coverage: dict = Field(default_factory=dict)
     prompt_version: str
     model: str | None = None
     provider: str | None = None
@@ -291,3 +322,47 @@ class ReviewReportResponse(BaseModel):
     created_at: datetime
     items: list[ReviewItemResponse] = Field(default_factory=list)
     action_items: list[ActionItemResponse] = Field(default_factory=list)
+
+
+class AppealCreate(BaseModel):
+    reason: str = Field(min_length=2, max_length=1000)
+
+
+class AppealResolve(BaseModel):
+    decision: str = Field(pattern="^(ACCEPTED|REJECTED)$")
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class AppealResponse(BaseModel):
+    id: int
+    item_id: int
+    reason: str
+    status: str
+    resolution_note: str | None = None
+    created_at: datetime
+    resolved_at: datetime | None = None
+
+
+class DesirabilityFlagResponse(BaseModel):
+    fragment_id: int
+    score: float
+    signals: list[str]
+    summary: str
+
+
+class EvidenceStep(BaseModel):
+    fragment_id: int
+    kind: str | None = None
+    payload: dict = Field(default_factory=dict)
+
+
+class EvidenceChainResponse(BaseModel):
+    item_id: int
+    section: str
+    conclusion: str
+    reasoning_chain: list[str] = Field(default_factory=list)
+    confidence_low: float | None = None
+    confidence_high: float | None = None
+    conflicts_with: list[int] = Field(default_factory=list)
+    appeal_status: str = "NONE"
+    evidence: list[EvidenceStep] = Field(default_factory=list)

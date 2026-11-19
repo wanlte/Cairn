@@ -25,6 +25,7 @@ from apps.api.profile.schemas import (
     ProfileOutput,
     ProfileSnapshotResponse,
 )
+from apps.api.samples.coverage import sample_coverage
 
 PROMPT_VERSION = "profile-v1"
 _PROMPT_PATH = Path(__file__).resolve().parents[3] / "prompts" / "profile" / "v1.txt"
@@ -146,11 +147,13 @@ class ProfileService:
             user_id,
             **request.gateway_kwargs(),
         )
+        coverage = await sample_coverage(session, user_id, list(fragments))
         snapshot = ProfileSnapshot(
             user_id=user_id,
             period=request.period,
             status="RUNNING",
             previous_snapshot_id=previous.id if previous else None,
+            coverage_json=coverage,
             prompt_version=PROMPT_VERSION,
             model=model,
             provider=provider.value if provider else None,
@@ -184,6 +187,7 @@ class ProfileService:
                 for item in rejected
             ],
         }
+        payload["样本体检"] = coverage
         if request.supplement:
             payload["supplement"] = request.supplement
         gateway_request = GatewayRequest(
@@ -355,6 +359,7 @@ class ProfileService:
             period=snapshot.period,
             status=snapshot.status,
             previous_snapshot_id=snapshot.previous_snapshot_id,
+            coverage=snapshot.coverage_json or {},
             prompt_version=snapshot.prompt_version,
             model=snapshot.model,
             provider=snapshot.provider,

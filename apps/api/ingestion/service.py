@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.db.models.ingestion import RawConversation, TurnPair
 from apps.api.errors import AppError
-from apps.api.ingestion.collectors import DeepSeekArchiveCollector, MarkdownCollector
+from apps.api.ingestion.collectors import collector_for
 from apps.api.ingestion.normalizer import Normalizer, content_hash, new_preview_turn_id
 from apps.api.ingestion.schemas import (
+    SINGLE_ROLE_SOURCES,
     IngestCommitRequest,
     IngestionPreview,
     IngestPreviewRequest,
@@ -49,11 +50,7 @@ class IngestionService:
 
     def preview(self, user_id: int, request: IngestPreviewRequest) -> IngestionPreview:
         payload, source_ref = self._decode(request)
-        collector = (
-            DeepSeekArchiveCollector()
-            if request.source_type == SourceType.DEEPSEEK_ARCHIVE
-            else MarkdownCollector()
-        )
+        collector = collector_for(request.source_type)
         items = collector.collect(payload, filename=source_ref)
         raw_text = (
             payload
@@ -67,6 +64,7 @@ class IngestionService:
             items=items,
             source_type=request.source_type,
             source_ref=source_ref,
+            single_role=request.source_type in SINGLE_ROLE_SOURCES,
         )
         turn_ids = [new_preview_turn_id() for _ in conversation.turns]
         turns = [

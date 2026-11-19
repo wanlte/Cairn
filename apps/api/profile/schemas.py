@@ -183,6 +183,7 @@ class ProfileSnapshotResponse(BaseModel):
     period: str
     status: str
     previous_snapshot_id: int | None = None
+    coverage: dict = Field(default_factory=dict)
     prompt_version: str
     model: str | None = None
     provider: str | None = None
