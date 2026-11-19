@@ -254,6 +254,22 @@ async def test_export_hides_technical_fields(monkeypatch):
         assert hidden not in text
 
 
+def test_profile_display_values_are_human_readable():
+    from apps.api.profile.schemas import ProfileGroup
+    from apps.api.profile.service import _display_claim_value
+
+    assert (
+        _display_claim_value(ProfileGroup.ATTENTION_TRAJECTORY.value, "product", "count=2")
+        == "产品与选题：最近提到 2 次"
+    )
+    assert (
+        _display_claim_value(ProfileGroup.HIGH_FREQUENCY_PITFALLS.value, "漏验证", "count=3")
+        == "漏验证：出现过 3 次"
+    )
+    assert _display_claim_value(ProfileGroup.GROWTH_SIGNALS.value, "已读", "已读") is None
+    assert _display_claim_value(ProfileGroup.GROWTH_SIGNALS.value, "新增技能", "已读") == "新增技能"
+
+
 def test_review_display_text_hides_internal_markers():
     from apps.api.review.service import _friendly_comparison, _friendly_text
 

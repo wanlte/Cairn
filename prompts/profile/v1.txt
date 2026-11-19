@@ -9,13 +9,13 @@
     {"key": "验证习惯", "value": "结论文本", "evidence_fragment_ids": [0]}
   ],
   "attention_trajectory": [
-    {"domain": "领域", "count": 0, "evidence_fragment_ids": [0]}
+    {"domain": "中文领域名", "count": 0, "evidence_fragment_ids": [0]}
   ],
   "high_frequency_pitfalls": [
-    {"pitfall": "高频误区", "count": 0, "evidence_fragment_ids": [0]}
+    {"pitfall": "具体误区的一句话", "count": 0, "evidence_fragment_ids": [0]}
   ],
   "growth_signals": [
-    {"signal": "新掌握概念数", "value": "0", "evidence_fragment_ids": [0]}
+    {"signal": "变化主题", "value": "一句话说清具体变化", "evidence_fragment_ids": [0]}
   ]
 }
 
@@ -23,6 +23,8 @@
 1. 每条结论必须引用 1 到 3 个存在的 fragment_id；无证据的结论会被系统丢弃。
 2. 上周用户手工修正过的结论不要重新生成；系统会把它们原样保留到新快照。
 3. 用户明确删除的结论不要再次出现；输入中的 rejected_claims 列出的是禁区。
-4. attention_trajectory 只统计本周输入里明确出现的领域。
-5. high_frequency_pitfalls 只列本周或历史快照里可追溯到 WRONG 判断的误区，不要编造。
-6. 不输出 Markdown 代码块，不输出解释文字，只输出 JSON。
+4. identity_background 只写这个人稳定的背景、角色、真正用过的技术/工具；任务说明、比赛规则、提交要求不算技术背景，没有证据就返回空数组。
+5. attention_trajectory 只统计本周输入里明确出现的领域；domain 必须是简短中文主题，不要输出 product、hackathon/product 这类英文编码。
+6. high_frequency_pitfalls 只列本周或历史快照里可追溯到 WRONG 判断的误区，不要编造；pitfall 写具体的行为或坑，不要只写计数。
+7. growth_signals 的 signal 是变化主题，value 必须是一句具体的中文变化描述；禁止只写“已读”“完成”“0”这类状态词或数字，没有内容就返回空数组。
+8. 不输出 Markdown 代码块，不输出解释文字，只输出 JSON。

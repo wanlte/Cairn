@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from sqlalchemy import select
@@ -27,6 +28,38 @@ from apps.api.profile.schemas import (
 
 PROMPT_VERSION = "profile-v1"
 _PROMPT_PATH = Path(__file__).resolve().parents[3] / "prompts" / "profile" / "v1.txt"
+
+_DOMAIN_LABELS = {
+    "product": "产品与选题",
+    "hackathon": "黑客松",
+    "hackathon/product": "黑客松选题",
+    "backend": "后端工程",
+    "frontend": "前端工程",
+    "design": "设计",
+    "research": "学习研究",
+    "concept": "概念理解",
+}
+_GENERIC_SIGNAL_VALUES = {"", "已读", "read", "完成", "未完成", "已验证", "未验证", "0", "1", "count=0"}
+
+
+def _friendly_domain(value: str) -> str:
+    label = (value or "").strip()
+    return _DOMAIN_LABELS.get(label.lower(), label)
+
+
+def _display_claim_value(group: str, key: str, value: str) -> str | None:
+    """把机器字段翻译成用户能直接看懂的一句话，坏数据直接丢掉。"""
+    clean = (value or "").strip()
+    if group in (ProfileGroup.ATTENTION_TRAJECTORY.value, ProfileGroup.HIGH_FREQUENCY_PITFALLS.value):
+        match = re.fullmatch(r"count\s*=\s*(\d+)", clean, re.IGNORECASE)
+        if match:
+            label = _friendly_domain(key)
+            unit = "最近提到" if group == ProfileGroup.ATTENTION_TRAJECTORY.value else "出现过"
+            return f"{label}：{unit} {match.group(1)} 次"
+    if group == ProfileGroup.GROWTH_SIGNALS.value and clean.lower() in _GENERIC_SIGNAL_VALUES:
+        label = (key or "").strip()
+        return None if label.lower() in _GENERIC_SIGNAL_VALUES else label
+    return clean
 
 
 def _load_prompt() -> str:
@@ -268,25 +301,33 @@ class ProfileService:
         for item in output.cognitive_style:
             claims.append((ProfileGroup.COGNITIVE_STYLE, item.key, item.value, item.evidence_fragment_ids))
         for item in output.attention_trajectory:
+            label = _friendly_domain(item.domain)
             claims.append(
                 (
                     ProfileGroup.ATTENTION_TRAJECTORY,
-                    item.domain,
-                    f"count={item.count}",
+                    label,
+                    f"{label}：最近提到 {item.count} 次",
                     item.evidence_fragment_ids,
                 )
             )
         for item in output.high_frequency_pitfalls:
+            label = (item.pitfall or "").strip()
             claims.append(
                 (
                     ProfileGroup.HIGH_FREQUENCY_PITFALLS,
-                    item.pitfall,
-                    f"count={item.count}",
+                    label,
+                    f"{label}：出现过 {item.count} 次",
                     item.evidence_fragment_ids,
                 )
             )
         for item in output.growth_signals:
-            claims.append((ProfileGroup.GROWTH_SIGNALS, item.signal, item.value, item.evidence_fragment_ids))
+            value = _display_claim_value(
+                ProfileGroup.GROWTH_SIGNALS.value, item.signal, item.value
+            )
+            if value:
+                claims.append(
+                    (ProfileGroup.GROWTH_SIGNALS, item.signal, value, item.evidence_fragment_ids)
+                )
         return claims
 
     async def _to_response(
@@ -302,6 +343,12 @@ class ProfileService:
                 .order_by(ProfileClaim.id)
             )
         ).scalars().all()
+        visible: list[ProfileClaimResponse] = []
+        for item in claims:
+            value = _display_claim_value(item.group_name, item.claim_key, item.value_text)
+            if value is None:
+                continue
+            visible.append(self._claim_to_response(item, value))
         return ProfileSnapshotResponse(
             id=snapshot.id,
             user_id=snapshot.user_id,
@@ -313,16 +360,16 @@ class ProfileService:
             provider=snapshot.provider,
             error_code=snapshot.error_code,
             created_at=snapshot.created_at,
-            claims=[self._claim_to_response(item) for item in claims],
+            claims=visible,
         )
 
     @staticmethod
-    def _claim_to_response(claim: ProfileClaim) -> ProfileClaimResponse:
+    def _claim_to_response(claim: ProfileClaim, value: str | None = None) -> ProfileClaimResponse:
         return ProfileClaimResponse(
             id=claim.id,
             group=ProfileGroup(claim.group_name),
             key=claim.claim_key,
-            value=claim.value_text,
+            value=value if value is not None else claim.value_text,
             evidence_fragment_ids=claim.evidence_fragment_ids,
             source=ClaimSource(claim.source),
             user_corrected=claim.user_corrected,
