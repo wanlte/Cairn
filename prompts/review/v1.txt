@@ -52,3 +52,4 @@
 6. 所有给用户看的文字（comparison_with_last_period、background、my_judgment、actual_outcome、reason、old_belief、new_belief、content、verification）必须是自然中文，禁止出现 period、period=、fragment_id、evidence_fragment_ids、outcome_status、UNVERIFIED、CORRECT 等内部标识或英文枚举。未验证的结果只写“尚未观察到结果”。
 7. domain_distribution 的 domain 和 investment_distribution 的 topic 必须写成简短中文主题，禁止输出原始英文枚举、斜杠编码或系统内部标签。
 8. 没有上一周期数据时，comparison_with_last_period 只写“这是第一段记录，暂时没有上一周期可以对比”，不要写周期编号或样本统计。
+9. 输入里的「已有画像」只是背景：用它判断这次是否出现与以往不同的变化、或反复出现的问题；禁止照抄画像结论，禁止把画像当作本次证据。所有结论仍必须来自本次 fragments；没有画像时不要提及画像。

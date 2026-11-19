@@ -176,6 +176,15 @@ def test_task_response_exposes_result_and_report_id():
     assert response.result["report_id"] == 42
 
 
+def test_coach_keywords_extracts_search_terms():
+    from apps.api.agents.tools import coach_keywords
+
+    terms = coach_keywords("帮我复盘一下分页稳定性的问题")
+    assert "分页" in terms
+    assert "稳定" in terms
+    assert len(terms) <= 12
+
+
 def test_langchain_adapter_routes_to_gateway_complete():
     import asyncio
 

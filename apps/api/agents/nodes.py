@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from apps.api.agents.state import (
     INTENT_LABELS,
     AgentEvent,
@@ -12,6 +14,7 @@ from apps.api.agents.state import (
 from apps.api.agents.tools import (
     AgentToolContext,
     FileInput,
+    coach_context,
     generate_profile,
     generate_review,
     ingest_and_extract,
@@ -193,14 +196,19 @@ def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: Task
 async def _coach_answer(tool_ctx: AgentToolContext, state: WorkspaceState) -> str:
     from apps.api.gateway.schemas import GatewayOptions, GatewayRequest
 
+    message = state.get("user_message", "") or "请帮我做个总结"
+    context = await coach_context(tool_ctx, message)
     request = GatewayRequest(
         task="agent_chat",
         messages=[
             {
                 "role": "system",
-                "content": "你是成长教练。基于用户的描述给出简洁、具体的回答，证据不足时坦诚说明，不要编造。",
+                "content": "你是成长教练。结合用户的成长画像和相关对话碎片回答：画像只是背景，不要照抄；结论必须有碎片支撑，证据不足时坦诚说明，不要编造。",
             },
-            {"role": "user", "content": state.get("user_message", "") or "请帮我做个总结"},
+            {
+                "role": "user",
+                "content": json.dumps({"问题": message, **context}, ensure_ascii=False),
+            },
         ],
         options=GatewayOptions(),
         user_id=tool_ctx.user_id,

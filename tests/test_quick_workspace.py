@@ -69,6 +69,40 @@ async def test_create_task_returns_friendly_stage_and_confirm_flow(client, monke
 
 
 @pytest.mark.asyncio
+async def test_free_question_carries_profile_and_history_context(client, monkeypatch):
+    captured: list = []
+
+    class CapturingGateway(FakeGateway):
+        async def complete(self, request, meter=None):
+            captured.append(request)
+            return SimpleNamespace(content="这是个基于记录的回答。", data=None)
+
+    async def fake_build(session, user_id, **kwargs):
+        return CapturingGateway(), None, "fake-model", None
+
+    monkeypatch.setattr("apps.api.workspace.service.build_gateway_for_user", fake_build)
+
+    headers = await _register_and_login(client)
+    response = await client.post(
+        "/api/v1/workspace/tasks",
+        json={
+            "message": "我最近在关注什么",
+            "direction": "free",
+            "files": [],
+            "model": {"provider": "deepseek", "credential_mode": "本机配置"},
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201
+
+    chat_requests = [item for item in captured if getattr(item, "task", "") == "agent_chat"]
+    assert chat_requests
+    payload = chat_requests[0].messages[1]["content"]
+    assert "画像" in payload
+    assert "相关记录" in payload
+
+
+@pytest.mark.asyncio
 async def test_temporary_key_not_reflected_in_task_response(client, monkeypatch):
     captured: dict = {}
 

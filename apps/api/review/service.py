@@ -20,6 +20,7 @@ from apps.api.gateway.schemas import (
     GatewayRequest,
     ResponseFormat,
 )
+from apps.api.profile.service import profile_service
 from apps.api.review.schemas import (
     REVIEW_JSON_SCHEMA,
     ActionItemResponse,
@@ -34,6 +35,14 @@ from apps.api.review.schemas import (
 
 PROMPT_VERSION = "review-v1"
 _PROMPT_PATH = Path(__file__).resolve().parents[3] / "prompts" / "review" / "v1.txt"
+
+PROFILE_GROUP_LABELS = {
+    "identity_background": "身份与技术背景",
+    "cognitive_style": "思考方式",
+    "attention_trajectory": "关注方向",
+    "high_frequency_pitfalls": "常见坑",
+    "growth_signals": "成长信号",
+}
 
 
 def _load_prompt() -> str:
@@ -134,6 +143,21 @@ class ReviewService:
         session.add(report)
         await session.flush()
 
+        profile_context: list[dict[str, str]] = []
+        try:
+            profile = await profile_service.get_current(session, user_id)
+        except AppError:
+            profile = None
+        if profile:
+            for claim in profile.claims:
+                group = getattr(claim.group, "value", str(claim.group))
+                profile_context.append(
+                    {
+                        "方面": PROFILE_GROUP_LABELS.get(group, group),
+                        "结论": claim.value,
+                    }
+                )
+
         settings = get_settings()
         fragment_payload = [
             {"id": item.id, "kind": item.kind, "payload": item.payload_json}
@@ -143,6 +167,8 @@ class ReviewService:
             "period_label": "本次复盘",
             "fragments": fragment_payload,
         }
+        if profile_context:
+            user_payload["已有画像"] = profile_context
         if request.direction:
             user_payload["direction"] = request.direction
         if request.supplement:

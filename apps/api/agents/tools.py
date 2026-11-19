@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 
 from apps.api.agents.state import ContextBundle
+from apps.api.db.models.extraction import Fragment
 from apps.api.errors import AppError
 from apps.api.extraction.schemas import ExtractionCreateRequest
 from apps.api.extraction.service import extraction_service
@@ -14,7 +18,7 @@ from apps.api.ingestion.service import ingestion_service
 from apps.api.profile.schemas import ProfileGenerateRequest
 from apps.api.profile.service import profile_service
 from apps.api.review.schemas import ReviewCreateRequest
-from apps.api.review.service import review_service
+from apps.api.review.service import PROFILE_GROUP_LABELS, review_service
 
 
 class FileInput(BaseModel):
@@ -166,3 +170,60 @@ async def generate_profile(ctx: AgentToolContext, context: ContextBundle, period
         message="画像已经更新",
         data={"profile_id": snapshot.id, "summary": summary},
     )
+
+
+def coach_keywords(message: str, limit: int = 12) -> list[str]:
+    """从提问里提取用于匹配历史碎片的短词。"""
+    cleaned = re.sub(r"[^\w\u4e00-\u9fff]+", " ", message or "")
+    words = re.findall(r"[A-Za-z0-9]{2,}|[\u4e00-\u9fff]{2,}", cleaned)
+    terms: list[str] = []
+    for word in words:
+        if re.fullmatch(r"[\u4e00-\u9fff]+", word):
+            terms.extend(word[index : index + 2] for index in range(len(word) - 1))
+        else:
+            terms.append(word)
+    return list(dict.fromkeys(terms))[:limit]
+
+
+async def coach_context(ctx: AgentToolContext, message: str) -> dict:
+    """问答用的画像背景和相关历史碎片。"""
+    if ctx.session is None:
+        return {"画像": [], "相关记录": []}
+    profile_payload: list[dict[str, str]] = []
+    try:
+        profile = await profile_service.get_current(ctx.session, ctx.user_id)
+    except AppError:
+        profile = None
+    if profile:
+        for claim in profile.claims:
+            group = getattr(claim.group, "value", str(claim.group))
+            profile_payload.append(
+                {"方面": PROFILE_GROUP_LABELS.get(group, group), "结论": claim.value}
+            )
+
+    rows = (
+        await ctx.session.execute(
+            select(Fragment)
+            .where(Fragment.user_id == ctx.user_id)
+            .order_by(Fragment.id.desc())
+            .limit(40)
+        )
+    ).scalars().all()
+    terms = coach_keywords(message)
+    scored: list[tuple[int, Fragment]] = []
+    for row in rows:
+        text = json.dumps(row.payload_json or {}, ensure_ascii=False)
+        scored.append((sum(1 for term in terms if term in text), row))
+    scored.sort(key=lambda item: (-item[0], -item[1].id))
+    chosen = [row for score, row in scored[:8] if score > 0] or [
+        row for _, row in scored[:5]
+    ]
+    fragments = [
+        {
+            "id": row.id,
+            "kind": row.kind,
+            "payload": json.dumps(row.payload_json or {}, ensure_ascii=False)[:600],
+        }
+        for row in chosen
+    ]
+    return {"画像": profile_payload, "相关记录": fragments}
