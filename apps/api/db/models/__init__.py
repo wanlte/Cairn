@@ -3,6 +3,7 @@ from apps.api.db.models.credential import ModelCredential
 from apps.api.db.models.extension import DailyQuestion, Simulation
 from apps.api.db.models.extraction import ExtractionRun, Fragment
 from apps.api.db.models.ingestion import RawConversation, TurnPair
+from apps.api.db.models.metrics import UserEvent
 from apps.api.db.models.planning import PlanBlueprint, WeeklyFill
 from apps.api.db.models.platform import ApiKey, AuditLog, ConsentRecord, PairRelationship
 from apps.api.db.models.profile import ProfileClaim, ProfileSnapshot
@@ -37,6 +38,7 @@ __all__ = [
     "Simulation",
     "TurnPair",
     "User",
+    "UserEvent",
     "WeeklyFill",
     "WorkspaceTask",
     "WorkspaceTaskEvent",

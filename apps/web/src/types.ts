@@ -475,3 +475,84 @@ export interface ExportResult {
   filename: string
   content: string
 }
+
+export interface MetricPoint {
+  bucket: string
+  value: number
+}
+
+export interface MetricPair {
+  label: string
+  fast: number
+  accurate: number
+  sample: number
+}
+
+export interface SystemMetrics {
+  total_requests: number
+  success_rate: number
+  error_codes: { code: string; count: number }[]
+  latency_p50_ms: number
+  latency_p95_ms: number
+  task_completion_rate: number
+  stage_latency_ms: { stage: string; count: number }[]
+  latency_trend: MetricPoint[]
+}
+
+export interface QualityMetrics {
+  schema_pass_rate: number
+  evidence_hit_rate: number
+  profile_stability: number
+  appeal_rate: number
+  appeal_correction_rate: number
+  confidence_avg: number
+  coverage_avg: number
+  coverage_distribution: { level: string; count: number }[]
+  speed_accuracy: MetricPair[]
+}
+
+export interface CostMetrics {
+  total_cost_cny: number
+  total_calls: number
+  total_tokens: number
+  retry_rate: number
+  fallback_rate: number
+  failure_rate: number
+  by_model: { model: string; calls: number; cost: number; tokens: number }[]
+  cost_trend: MetricPoint[]
+}
+
+export interface BehaviorMetrics {
+  funnel: { label: string; count: number }[]
+  feature_penetration: { feature: string; count: number; rate: number }[]
+  events_by_day: MetricPoint[]
+}
+
+export interface ValueMetrics {
+  coverage_improvement: number
+  weekly_streak: number
+  weekly_fills: number
+  export_count: number
+  open_api_calls: number
+  pair_analysis_count: number
+}
+
+export interface SecurityMetrics {
+  denied_requests: number
+  revoked_keys: number
+  consent_coverage: number
+  audit_events: number
+  redaction_hits: number
+}
+
+export interface MetricsOverview {
+  window_days: number
+  generated_at: string
+  system: SystemMetrics
+  quality: QualityMetrics
+  cost: CostMetrics
+  behavior: BehaviorMetrics
+  value: ValueMetrics
+  security: SecurityMetrics
+  headline: Record<string, number | string>
+}

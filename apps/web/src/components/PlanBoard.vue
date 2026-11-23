@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { AlertTriangle, CheckCircle2, GitBranch, LoaderCircle, Sparkles } from 'lucide-vue-next'
-import { ApiError, planningApi } from '../api/client'
+import { ApiError, metricsApi, planningApi } from '../api/client'
 import { workspace } from '../stores/workspace'
 import type { PlanResponse } from '../types'
 import { friendlyError } from '../utils/friendly'
@@ -50,6 +50,7 @@ async function generate(): Promise<void> {
       credential_id: model.credentialId,
       ...(model.temporaryKey ? { temporary_api_key: model.temporaryKey } : {}),
     })
+    void metricsApi.track('plan_generated')
     goal.value = ''
     editing.value = false
   } catch (err) {

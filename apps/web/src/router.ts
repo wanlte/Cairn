@@ -17,6 +17,12 @@ export const router = createRouter({
     { path: '/data', name: 'data', component: DataView, meta: { requiresAuth: true } },
     { path: '/lab', name: 'lab', component: LabView, meta: { requiresAuth: true } },
     {
+      path: '/metrics',
+      name: 'metrics',
+      component: () => import('./views/MetricsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/reports/:id',
       name: 'report-detail',
       component: ReviewReportView,

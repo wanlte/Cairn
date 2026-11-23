@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ArrowRight, CheckCircle2, LoaderCircle } from 'lucide-vue-next'
-import { ingestionApi } from '../api/client'
+import { ingestionApi, metricsApi } from '../api/client'
 import type { IngestionPreview } from '../types'
 import { friendlyError } from '../utils/friendly'
 
@@ -53,6 +53,7 @@ async function commit(): Promise<void> {
       : `已经收好 ${result.turn_count} 条记录。`
     preview.value = null
     text.value = ''
+    void metricsApi.track('import_completed', { source: sourceType.value })
     emit('imported')
   } catch (err) {
     error.value = friendlyError(err)

@@ -11,6 +11,7 @@ import type {
   ExportResult,
   PairAnalysisResult,
   IngestionPreview,
+  MetricsOverview,
   ModelSelection,
   PlanResponse,
   QuickModelOption,
@@ -347,4 +348,12 @@ export const extensionsApi = {
 export const exportsApi = {
   get: (kind: string, format: 'json' | 'md' | 'html') =>
     api.get<ExportResult>(`/exports/${kind}?format=${format}`),
+}
+
+export const metricsApi = {
+  overview: (windowDays: number) =>
+    api.get<MetricsOverview>(`/metrics/overview?window_days=${windowDays}`),
+
+  track: (eventType: string, payload: Record<string, unknown> = {}) =>
+    api.post('/metrics/events', { event_type: eventType, payload }).catch(() => undefined),
 }

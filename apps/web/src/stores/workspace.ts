@@ -1,5 +1,5 @@
 import { computed, reactive } from 'vue'
-import { workspaceApi } from '../api/client'
+import { metricsApi, workspaceApi } from '../api/client'
 import type {
   AgentBubble,
   AgentResult,
@@ -307,6 +307,7 @@ export const workspace = {
         })),
         model: { ...state.model },
       })
+      void metricsApi.track('task_started', { direction: state.direction })
       activeStreamTask = response.task_id
       confirmedTask = ''
       state.taskId = response.task_id

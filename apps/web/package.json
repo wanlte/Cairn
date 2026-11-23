@@ -10,22 +10,24 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "vue": "^3.5.13",
-    "vue-router": "^4.5.0",
+    "@fortawesome/fontawesome-svg-core": "^6.7.2",
+    "@fortawesome/free-brands-svg-icons": "^6.7.2",
+    "@fortawesome/vue-fontawesome": "^3.0.8",
+    "echarts": "^6.1.0",
     "lucide-vue-next": "^0.468.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "@fortawesome/fontawesome-svg-core": "^6.7.2",
-    "@fortawesome/free-brands-svg-icons": "^6.7.2",
-    "@fortawesome/vue-fontawesome": "^3.0.8"
+    "vue": "^3.5.13",
+    "vue-echarts": "^8.3.2",
+    "vue-router": "^4.5.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.6",
+    "tailwindcss": "3.4.17",
     "typescript": "~5.6.3",
     "vite": "^5.4.11",
-    "vue-tsc": "^2.2.0",
-    "tailwindcss": "3.4.17",
-    "postcss": "^8.5.6",
-    "autoprefixer": "^10.4.20"
+    "vue-tsc": "^2.2.0"
   }
 }

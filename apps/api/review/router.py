@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth.deps import get_current_user
 from apps.api.db.base import get_session
+from apps.api.db.models.metrics import UserEvent
 from apps.api.db.models.user import User
 from apps.api.review.schemas import (
     ActionItemResponse,
@@ -28,6 +29,13 @@ async def create_review(
     current_user: User = Depends(get_current_user),
 ) -> ReviewReportResponse:
     result = await review_service.create_report(session, current_user.id, payload)
+    session.add(
+        UserEvent(
+            user_id=current_user.id,
+            event_type="review_generated",
+            payload_json={"period": result.period},
+        )
+    )
     await session.commit()
     return result
 

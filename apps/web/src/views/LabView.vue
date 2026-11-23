@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { Download, LoaderCircle, Sparkles, Users } from 'lucide-vue-next'
-import { exportsApi, extensionsApi } from '../api/client'
+import { exportsApi, extensionsApi, metricsApi } from '../api/client'
 import { workspace } from '../stores/workspace'
 import type {
   DailyQuestion,
@@ -51,6 +51,7 @@ async function answerDaily(): Promise<void> {
   error.value = ''
   try {
     daily.value = await extensionsApi.answerDaily(daily.value.id, dailyAnswer.value.trim())
+    void metricsApi.track('daily_answered')
     dailyAnswer.value = ''
   } catch (err) {
     error.value = friendlyError(err)
@@ -69,6 +70,7 @@ async function simulate(): Promise<void> {
       choice: choice.value.trim(),
       ...modelArgs(),
     })
+    void metricsApi.track('simulation_run')
   } catch (err) {
     error.value = friendlyError(err)
   } finally {
@@ -85,6 +87,7 @@ async function decide(): Promise<void> {
       question: question.value.trim(),
       ...modelArgs(),
     })
+    void metricsApi.track('decision_requested')
   } catch (err) {
     error.value = friendlyError(err)
   } finally {
@@ -101,6 +104,7 @@ async function analyzePair(): Promise<void> {
       pair_id: pairId.value,
       ...modelArgs(),
     })
+    void metricsApi.track('pair_analysis')
   } catch (err) {
     error.value = friendlyError(err)
   } finally {
@@ -113,6 +117,7 @@ async function download(kind: string, format: 'json' | 'md' | 'html'): Promise<v
   error.value = ''
   try {
     const result = await exportsApi.get(kind, format)
+    void metricsApi.track('export_used', { kind, format })
     const blob = new Blob([result.content], {
       type: format === 'html' ? 'text/html' : 'text/plain',
     })

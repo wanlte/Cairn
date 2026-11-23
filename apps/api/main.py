@@ -15,6 +15,7 @@ from apps.api.health import router as health_router
 from apps.api.ingestion.router import router as ingestion_router
 from apps.api.insights.router import router as insights_router
 from apps.api.logging import setup_logging
+from apps.api.metrics.router import router as metrics_router
 from apps.api.middleware import RequestIdMiddleware
 from apps.api.openapi.router import router as openapi_router
 from apps.api.planning.router import router as planning_router
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(planning_router)
     app.include_router(extensions_router)
     app.include_router(exports_router)
+    app.include_router(metrics_router)
     app.include_router(openapi_router)
     register_error_handlers(app)
     return app
