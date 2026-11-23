@@ -1,5 +1,10 @@
 import { computed, reactive } from 'vue'
-import { metricsApi, workspaceApi } from '../api/client'
+import {
+  metricsApi,
+  workspaceApi,
+  type WorkspaceHistory,
+  type WorkspaceTaskResponse,
+} from '../api/client'
 import type {
   AgentBubble,
   AgentResult,
@@ -69,6 +74,8 @@ const state = reactive({
   busy: false,
   notice: '',
   noticeKind: 'info' as 'info' | 'error' | 'success',
+  history: [] as WorkspaceTaskResponse[],
+  historyLoading: false,
 })
 
 const availablePrompts = computed(() => [...BUILTIN_PROMPTS, ...state.savedPrompts])
@@ -316,6 +323,7 @@ export const workspace = {
       workspaceApi.events(response.task_id, handleEvent).catch(() => {
         state.messages = state.messages.filter((item) => item.kind !== 'working')
       })
+      void workspaceApi.list().then((items) => { state.history = items }).catch(() => undefined)
     } catch (err) {
       state.messages = state.messages.filter((item) => item.kind !== 'working')
       state.stage = '遇到问题'
@@ -360,6 +368,87 @@ export const workspace = {
     state.confirmPrompt = ''
     state.stage = '等待中'
     state.taskId = ''
+  },
+
+  async loadHistory(limit = 50): Promise<void> {
+    state.historyLoading = true
+    try {
+      state.history = await workspaceApi.list(limit)
+    } catch (err) {
+      notify(friendlyError(err), 'error')
+    } finally {
+      state.historyLoading = false
+    }
+  },
+
+  async openTask(taskId: string): Promise<void> {
+    if (state.busy || !taskId) return
+    resetPlayback()
+    activeStreamTask = ''
+    confirmedTask = ''
+    state.busy = true
+    try {
+      const data: WorkspaceHistory = await workspaceApi.history(taskId)
+      state.messages.splice(0)
+      state.bubbles.splice(0)
+      state.files.splice(0)
+      for (const item of data.messages) {
+        if (item.kind === 'result' && item.result) {
+          const result = normalizeAgentResult(item.result)
+          if (result) {
+            state.messages.push({
+              id: item.id,
+              role: '助手',
+              text: result.summary,
+              kind: 'result',
+              result,
+              createdAt: item.created_at || new Date().toISOString(),
+            })
+          }
+        } else if (item.kind === 'agent') {
+          const agentState =
+            item.agent_state === '进行中' || item.agent_state === '需要确认'
+              ? item.agent_state
+              : '完成'
+          state.messages.push({
+            id: item.id,
+            role: item.role as ConversationMessage['role'],
+            text: item.text,
+            kind: 'agent',
+            bubbleId: item.bubble_id || undefined,
+            agentState,
+            createdAt: item.created_at || new Date().toISOString(),
+          })
+          if (item.bubble_id) {
+            state.bubbles.push({
+              id: item.bubble_id,
+              role: item.role as AgentBubble['role'],
+              message: item.text,
+              state: agentState,
+            })
+          }
+        } else {
+          state.messages.push({
+            id: item.id,
+            role: item.role === '用户' ? '用户' : '助手',
+            text: item.text,
+            kind: 'text',
+            createdAt: item.created_at || new Date().toISOString(),
+          })
+        }
+      }
+      state.taskId = data.task.task_id
+      state.result = normalizeAgentResult(data.task.result) || null
+      state.stage = friendlyStage(data.task.stage)
+      state.confirmPrompt = data.task.confirm_prompt || ''
+      state.direction = (data.task.direction as DirectionKey) || 'free'
+      state.notice = '已载入这次对话，可以直接继续问'
+      state.noticeKind = 'success'
+    } catch (err) {
+      notify(friendlyError(err), 'error')
+    } finally {
+      state.busy = false
+    }
   },
 }
 

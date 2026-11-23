@@ -10,14 +10,17 @@ from apps.api.agents.events import append_event
 from apps.api.agents.graph import build_workspace_graph
 from apps.api.agents.state import AgentEvent, AgentResult, ContextBundle, WorkspaceState
 from apps.api.agents.tools import AgentToolContext
-from apps.api.db.models.workspace import WorkspaceTask
+from apps.api.db.models.workspace import WorkspaceTask, WorkspaceTaskEvent
 from apps.api.errors import AppError
 from apps.api.gateway.factory import build_gateway_for_user
 from apps.api.gateway.langchain_adapter import GatewayChatModel
 from apps.api.workspace.schemas import (
     WorkspaceConfirmBody,
+    WorkspaceHistoryResponse,
+    WorkspaceMessageRecord,
     WorkspaceModelSelection,
     WorkspaceTaskCreate,
+    WorkspaceTaskResponse,
     resolve_intent,
 )
 
@@ -121,6 +124,7 @@ async def create_task(
         intent=intent_key,
         direction=payload.direction,
         recommend_reason=reason,
+        user_message=payload.message or None,
     )
     session.add(task)
     await session.flush()
@@ -171,6 +175,79 @@ async def get_task(session: AsyncSession, user_id: int, task_key: str) -> Worksp
     if not task:
         raise AppError("TASK_NOT_FOUND", "没有找到这次处理记录", 404)
     return task
+
+
+async def list_tasks(
+    session: AsyncSession, user_id: int, limit: int = 50
+) -> list[WorkspaceTaskResponse]:
+    """列出用户的历史对话，按最近更新倒序。"""
+    tasks = (
+        await session.execute(
+            select(WorkspaceTask)
+            .where(WorkspaceTask.user_id == user_id)
+            .order_by(WorkspaceTask.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    return [WorkspaceTaskResponse.from_task(task) for task in tasks]
+
+
+async def build_history(
+    session: AsyncSession, user_id: int, task_key: str
+) -> WorkspaceHistoryResponse:
+    """用任务与历史事件重建一次完整对话，供前端加载后继续。"""
+    task = await get_task(session, user_id, task_key)
+    rows = (
+        await session.execute(
+            select(WorkspaceTaskEvent)
+            .where(WorkspaceTaskEvent.task_id == task.id)
+            .order_by(WorkspaceTaskEvent.seq)
+        )
+    ).scalars().all()
+
+    messages: list[WorkspaceMessageRecord] = []
+    if task.user_message:
+        messages.append(
+            WorkspaceMessageRecord(
+                id=f"user-{task.task_key[:8]}",
+                role="用户",
+                text=task.user_message,
+                kind="text",
+                created_at=task.created_at,
+            )
+        )
+
+    result_seen = False
+    for row in rows:
+        payload = dict(row.payload_json or {})
+        if row.role:
+            messages.append(
+                WorkspaceMessageRecord(
+                    id=row.bubble_id or f"bubble-{row.seq}",
+                    role=row.role or "助手",
+                    text=row.message,
+                    kind="agent",
+                    bubble_id=row.bubble_id or f"bubble-{row.seq}",
+                    agent_state=row.role_state,
+                    created_at=row.created_at,
+                )
+            )
+        if "result" in payload and not result_seen:
+            messages.append(
+                WorkspaceMessageRecord(
+                    id=f"result-{row.seq}",
+                    role="助手",
+                    text="",
+                    kind="result",
+                    result=payload["result"],
+                    created_at=row.created_at,
+                )
+            )
+            result_seen = True
+
+    return WorkspaceHistoryResponse(
+        task=WorkspaceTaskResponse.from_task(task), messages=messages
+    )
 
 
 async def confirm_task(

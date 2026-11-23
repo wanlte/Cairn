@@ -36,14 +36,23 @@ def _period(state: WorkspaceState) -> str:
     return f"ws-{state.get('task_key', 'task')[:12]}"
 
 
-def _emit(state: WorkspaceState, role: AgentRole, message: str, *, done: bool = False) -> dict:
+def _emit(
+    state: WorkspaceState,
+    role: AgentRole,
+    message: str,
+    *,
+    done: bool = False,
+    base: list[dict] | None = None,
+) -> dict:
+    """产出一条事件。传 base 时在其之上追加，避免同一节点内相互覆盖。"""
     event = AgentEvent(
         role=role,
         state="完成" if done else "进行中",
         message=message,
         bubble_id=f"{role.value}-{state.get('task_key', 'task')[:8]}",
     )
-    return {"events": state.get("events", []) + [event.model_dump()]}
+    existing = base if base is not None else state.get("events", [])
+    return {"events": list(existing) + [event.model_dump()]}
 
 
 async def organizer_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dict:
@@ -52,7 +61,7 @@ async def organizer_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> d
     updates: dict = _emit(state, AgentRole.ORGANIZER, "整理师正在梳理你提供的内容…")
     files = [FileInput.model_validate(item) for item in state.get("files", [])]
     if not files:
-        updates.update(_emit(state, AgentRole.ORGANIZER, "收到，我来看看怎么帮你", done=True))
+        updates.update(_emit(state, AgentRole.ORGANIZER, "收到，我来看看怎么帮你", done=True, base=updates["events"]))
         return updates
     result = await ingest_and_extract(tool_ctx, files)
     if result.ok:
@@ -60,7 +69,7 @@ async def organizer_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> d
         context.turn_count = result.data.get("turn_count", 0)
         context.fragment_count = result.data.get("fragment_count", 0)
     _write_context(updates, context)
-    updates.update(_emit(state, AgentRole.ORGANIZER, result.message, done=result.ok))
+    updates.update(_emit(state, AgentRole.ORGANIZER, result.message, done=result.ok, base=updates["events"]))
     return updates
 
 
@@ -76,7 +85,7 @@ async def reviewer_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> di
     if not result.ok:
         context.evidence_weak = True
     _write_context(updates, context)
-    updates.update(_emit(state, AgentRole.REVIEWER, result.message, done=result.ok))
+    updates.update(_emit(state, AgentRole.REVIEWER, result.message, done=result.ok, base=updates["events"]))
     return updates
 
 
@@ -91,7 +100,7 @@ async def profiler_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> di
         context.profile_id = result.data.get("profile_id")
         context.profile_summary = result.data.get("summary", "")
     _write_context(updates, context)
-    updates.update(_emit(state, AgentRole.PROFILER, result.message, done=result.ok))
+    updates.update(_emit(state, AgentRole.PROFILER, result.message, done=result.ok, base=updates["events"]))
     return updates
 
 
@@ -107,7 +116,7 @@ async def coach_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dict:
     updates = _emit(state, AgentRole.COACH, start_message)
     context.answer = await _coach_answer(tool_ctx, state)
     _write_context(updates, context)
-    updates.update(_emit(state, AgentRole.COACH, "教练已经准备好回答", done=True))
+    updates.update(_emit(state, AgentRole.COACH, "教练已经准备好回答", done=True, base=updates["events"]))
     return updates
 
 
@@ -125,12 +134,26 @@ async def auditor_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dic
         context.revisions += 1
         updates["revision_of"] = "reviewer"
         updates.update(
-            _emit(state, AgentRole.AUDITOR, "有几处依据还不够，回头再补充一次", done=True)
+            _emit(
+                state,
+                AgentRole.AUDITOR,
+                "有几处依据还不够，回头再补充一次",
+                done=True,
+                base=updates["events"],
+            )
         )
     else:
         updates["revision_of"] = None
         updates["confirm_prompt"] = "这份结果需要你点头确认，确认后就正式保存。"
-        updates.update(_emit(state, AgentRole.AUDITOR, "核对完成，请你确认一下", done=True))
+        updates.update(
+            _emit(
+                state,
+                AgentRole.AUDITOR,
+                "核对完成，请你确认一下",
+                done=True,
+                base=updates["events"],
+            )
+        )
     _write_context(updates, context)
     return updates
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,10 +10,17 @@ from apps.api.db.base import get_session
 from apps.api.db.models.user import User
 from apps.api.workspace.schemas import (
     WorkspaceConfirmBody,
+    WorkspaceHistoryResponse,
     WorkspaceTaskCreate,
     WorkspaceTaskResponse,
 )
-from apps.api.workspace.service import confirm_task, create_task, get_task
+from apps.api.workspace.service import (
+    build_history,
+    confirm_task,
+    create_task,
+    get_task,
+    list_tasks,
+)
 
 router = APIRouter(prefix="/api/v1/workspace", tags=["workspace"])
 
@@ -27,6 +34,24 @@ async def create_workspace_task(
     task = await create_task(session, current_user.id, payload)
     await session.commit()
     return WorkspaceTaskResponse.from_task(task)
+
+
+@router.get("/tasks", response_model=list[WorkspaceTaskResponse])
+async def list_workspace_tasks(
+    limit: int = Query(default=50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[WorkspaceTaskResponse]:
+    return await list_tasks(session, current_user.id, limit)
+
+
+@router.get("/tasks/{task_key}/history", response_model=WorkspaceHistoryResponse)
+async def workspace_task_history(
+    task_key: str,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> WorkspaceHistoryResponse:
+    return await build_history(session, current_user.id, task_key)
 
 
 @router.get("/tasks/{task_key}", response_model=WorkspaceTaskResponse)

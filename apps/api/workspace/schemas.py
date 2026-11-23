@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, SecretStr
@@ -63,6 +64,11 @@ class WorkspaceTaskResponse(BaseModel):
     result: dict[str, Any] | None = None
     report_id: int | None = None
 
+    user_message: str | None = None
+    intent: str = "free"
+    direction: str | None = None
+    created_at: datetime | None = None
+
     @classmethod
     def from_task(cls, task) -> WorkspaceTaskResponse:
         raw = task.result_json if isinstance(task.result_json, dict) else None
@@ -73,7 +79,29 @@ class WorkspaceTaskResponse(BaseModel):
             confirm_prompt=task.confirm_prompt,
             result=raw,
             report_id=raw.get("report_id") if raw else None,
+            user_message=getattr(task, "user_message", None),
+            intent=getattr(task, "intent", None) or "free",
+            direction=getattr(task, "direction", None),
+            created_at=getattr(task, "created_at", None),
         )
+
+
+class WorkspaceMessageRecord(BaseModel):
+    """从历史事件重建出来的一条对话消息。"""
+
+    id: str
+    role: str
+    text: str
+    kind: str = "text"
+    bubble_id: str | None = None
+    agent_state: str | None = None
+    result: dict[str, Any] | None = None
+    created_at: datetime | None = None
+
+
+class WorkspaceHistoryResponse(BaseModel):
+    task: WorkspaceTaskResponse
+    messages: list[WorkspaceMessageRecord] = Field(default_factory=list)
 
 
 def resolve_intent(direction: str) -> TaskIntent:

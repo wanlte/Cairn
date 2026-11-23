@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { AlertCircle, CheckCircle2, FileText, Info, LoaderCircle, MessagesSquare, Paperclip, Trash2 } from 'lucide-vue-next'
+import { AlertCircle, CheckCircle2, Clock3, FileText, Info, LoaderCircle, MessagesSquare, Paperclip, Trash2, X } from 'lucide-vue-next'
 import ChatComposer from '../components/ChatComposer.vue'
 import ResultCard from '../components/ResultCard.vue'
 import { workspace } from '../stores/workspace'
@@ -9,7 +9,27 @@ import type { AgentRoleLabel, UploadFileState } from '../types'
 
 onMounted(() => {
   workspace.loadQuickModels()
+  workspace.loadHistory()
 })
+
+const historyOpen = ref(false)
+
+function titleOf(task: { user_message?: string | null; intent?: string }): string {
+  const text = (task.user_message || '').trim()
+  if (!text) return '一次对话'
+  return text.length > 28 ? `${text.slice(0, 28)}…` : text
+}
+
+function timeOf(value?: string | null): string {
+  if (!value) return ''
+  const date = new Date(value)
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+async function openHistory(taskId: string): Promise<void> {
+  historyOpen.value = false
+  await workspace.openTask(taskId)
+}
 
 const agentEmoji: Record<AgentRoleLabel, string> = {
   整理师: '🧺',
@@ -50,9 +70,53 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
 
     <div class="relative mx-auto flex h-full w-full max-w-[820px] flex-col px-5">
       <div
-        class="shrink-0 text-center animate-fade-up"
+        class="relative z-40 shrink-0 text-center animate-fade-up"
         :class="workspace.hasStarted ? 'pb-2 pt-4' : 'pb-4 pt-8 sm:pt-10'"
       >
+        <button
+          type="button"
+          class="absolute right-0 top-3 flex items-center gap-1.5 rounded-full border border-[#e4e8f0] bg-white px-3.5 py-1.5 text-[12px] font-medium text-[#5b6478] shadow-sm transition hover:border-brand/30 hover:text-brand"
+          @click="historyOpen = !historyOpen; workspace.loadHistory()"
+        >
+          <Clock3 :size="14" /> 历史对话
+        </button>
+
+        <div
+          v-if="historyOpen"
+          class="absolute right-0 top-12 z-30 w-[320px] max-w-[88vw] rounded-[16px] border border-[#e4e8f0] bg-white p-2 text-left shadow-xl animate-fade-up"
+        >
+          <div class="flex items-center justify-between px-2 py-1.5">
+            <span class="text-[13px] font-semibold text-ink">过往对话</span>
+            <button type="button" class="rounded-full p-1 text-muted hover:bg-[#f4f6fa] hover:text-ink" @click="historyOpen = false">
+              <X :size="14" />
+            </button>
+          </div>
+          <div v-if="workspace.state.historyLoading" class="flex items-center gap-2 px-2 py-6 text-[12px] text-muted">
+            <LoaderCircle :size="14" class="animate-spin text-brand" /> 正在找过往对话…
+          </div>
+          <div v-else-if="!workspace.state.history.length" class="px-2 py-6 text-center text-[12px] text-muted">
+            还没有历史对话，聊过几次后就会出现在这里。
+          </div>
+          <button
+            v-else
+            v-for="task in workspace.state.history"
+            :key="task.task_id"
+            type="button"
+            class="flex w-full flex-col gap-1 rounded-[12px] px-3 py-2.5 text-left transition hover:bg-[#f7f8fc]"
+            @click="openHistory(task.task_id)"
+          >
+            <span class="line-clamp-2 text-[12px] font-medium leading-snug text-ink">{{ titleOf(task) }}</span>
+            <span class="flex items-center gap-2 text-[11px] text-muted">
+              <span>{{ timeOf(task.created_at) }}</span>
+              <span class="rounded-full bg-[#eef0ff] px-1.5 py-0.5 text-brand">
+                {{ task.intent === 'free' ? '聊天' : task.intent === 'growth' ? '画像' : '复盘' }}
+              </span>
+              <span v-if="task.stage === 'DONE'" class="text-[#0f766e]">已完成</span>
+              <span v-else-if="task.stage === 'FAILED'" class="text-[#b42318]">未完成</span>
+            </span>
+          </button>
+        </div>
+
         <div
           v-if="!workspace.hasStarted"
           class="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-[16px] bg-gradient-to-br from-brand to-brand-teal text-white shadow-glow"

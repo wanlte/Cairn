@@ -23,6 +23,7 @@ class WorkspaceTask(Base):
     intent: Mapped[str] = mapped_column(String(32), nullable=False, default="free")
     direction: Mapped[str | None] = mapped_column(String(64), nullable=True)
     recommend_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    user_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     confirm_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)

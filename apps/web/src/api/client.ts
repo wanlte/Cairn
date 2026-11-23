@@ -184,6 +184,26 @@ export interface WorkspaceTaskResponse {
   confirm_prompt?: string | null
   result?: AgentResult | null
   report_id?: number | null
+  user_message?: string | null
+  intent?: string
+  direction?: string | null
+  created_at?: string | null
+}
+
+export interface HistoryMessage {
+  id: string
+  role: string
+  text: string
+  kind: string
+  bubble_id?: string | null
+  agent_state?: string | null
+  result?: AgentResult | null
+  created_at?: string | null
+}
+
+export interface WorkspaceHistory {
+  task: WorkspaceTaskResponse
+  messages: HistoryMessage[]
 }
 
 export interface WorkspaceConfirmBody {
@@ -205,6 +225,11 @@ export const workspaceApi = {
     }),
 
   task: (taskId: string) => api.get<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}`),
+
+  list: (limit = 50) => api.get<WorkspaceTaskResponse[]>(`/workspace/tasks?limit=${limit}`),
+
+  history: (taskId: string) =>
+    api.get<WorkspaceHistory>(`/workspace/tasks/${taskId}/history`),
 
   events: (taskId: string, onEvent: (data: WorkspaceEvent) => void) =>
     api.stream(`/workspace/tasks/${taskId}/events`, onEvent),

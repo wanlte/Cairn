@@ -3,6 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
+
+from apps.api.db.models.user import User
+from apps.api.db.models.workspace import WorkspaceTask, WorkspaceTaskEvent
 
 
 class FakeGateway:
@@ -136,6 +140,70 @@ async def test_custom_direction_reaches_chat_prompt(client, monkeypatch):
     payload = chat_requests[0].messages[1]["content"]
     assert "苏格拉底式提问" in payload
     assert response.json()["stage"] == "DONE"
+
+
+@pytest.mark.asyncio
+async def test_history_list_and_replay(client, db_session):
+    """历史列表返回任务标题，回放能用事件重建用户消息、Agent 气泡和结果卡片。"""
+    headers = await _register_and_login(client)
+    user = (
+        await db_session.execute(select(User).where(User.email == "ws-user@cairn.dev"))
+    ).scalar_one()
+
+    task = WorkspaceTask(
+        task_key="task-history-demo1",
+        user_id=user.id,
+        status="DONE",
+        intent="free",
+        direction="free",
+        user_message="上次我们聊过的拖延问题",
+        result_json={
+            "kind": "问答",
+            "title": "自由提问",
+            "summary": "上次建议你先做五分钟。",
+            "suggestions": [],
+            "next_label": "继续提问",
+        },
+    )
+    db_session.add(task)
+    await db_session.flush()
+    db_session.add_all([
+        WorkspaceTaskEvent(
+            task_id=task.id, seq=1, role="整理师", role_state="完成",
+            message="整理好了", bubble_id="organizer-1", stage="RUNNING",
+        ),
+        WorkspaceTaskEvent(
+            task_id=task.id, seq=2, role="问答教练", role_state="完成",
+            message="这是历史里的回答。", bubble_id="coach-1", stage="RUNNING",
+        ),
+        WorkspaceTaskEvent(
+            task_id=task.id, seq=3, role_state="完成", message="回答好了",
+            stage="DONE", payload_json={"result": task.result_json},
+        ),
+    ])
+    await db_session.commit()
+
+    listing = await client.get("/api/v1/workspace/tasks", headers=headers)
+    assert listing.status_code == 200
+    items = listing.json()
+    assert any(item["task_id"] == task.task_key for item in items)
+    item = next(item for item in items if item["task_id"] == task.task_key)
+    assert item["user_message"] == "上次我们聊过的拖延问题"
+
+    history = await client.get(
+        f"/api/v1/workspace/tasks/{task.task_key}/history", headers=headers
+    )
+    assert history.status_code == 200
+    data = history.json()
+    assert data["task"]["task_id"] == task.task_key
+    kinds = [message["kind"] for message in data["messages"]]
+    assert "text" in kinds
+    assert "agent" in kinds
+    assert "result" in kinds
+    user_message = next(message for message in data["messages"] if message["kind"] == "text")
+    assert "拖延" in user_message["text"]
+    result_message = next(message for message in data["messages"] if message["kind"] == "result")
+    assert result_message["result"]["summary"] == "上次建议你先做五分钟。"
 
 
 @pytest.mark.asyncio
