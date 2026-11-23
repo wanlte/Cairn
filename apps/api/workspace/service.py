@@ -35,6 +35,10 @@ def _task_key() -> str:
 
 
 def _recommend(payload: WorkspaceTaskCreate) -> tuple[str, str]:
+    # 没有文件时一律走自由对话：没有证据支撑，复盘/画像节点只会空转，
+    # 用户真正的诉求是像聊天一样直接得到回答。
+    if not payload.files:
+        return "free", RECOMMEND_REASONS["free"]
     source = f"{payload.message} {' '.join(file.name for file in payload.files)}".lower()
     rules = [
         ("weekly", ["本周", "这周", "一周", "周报", "weekly"]),
@@ -47,9 +51,7 @@ def _recommend(payload: WorkspaceTaskCreate) -> tuple[str, str]:
             return key, RECOMMEND_REASONS[key]
     if payload.direction and payload.direction != "free":
         return payload.direction, "按你选的方向来"
-    if payload.files:
-        return "conversation", RECOMMEND_REASONS["conversation"]
-    return "free", RECOMMEND_REASONS["free"]
+    return "conversation", RECOMMEND_REASONS["conversation"]
 
 
 async def _build_tool_ctx(
@@ -88,6 +90,7 @@ def _initial_state(
         user_id=task.user_id,
         intent=intent_key,
         user_message=payload.message,
+        supplement=context.supplement,
         files=[file.model_dump() for file in payload.files],
         context=context.model_dump(mode="json"),
         events=[],
@@ -135,8 +138,10 @@ async def create_task(
             if isinstance(raw_context, ContextBundle)
             else ContextBundle.model_validate(raw_context)
         )
-        task.status = "WAITING_CONFIRM"
-        task.confirm_prompt = "这份结果需要你点头确认，确认后就正式保存。"
+        final_stage = final.get("stage", "WAITING_CONFIRM")
+        task.status = final_stage
+        if final_stage == "WAITING_CONFIRM":
+            task.confirm_prompt = "这份结果需要你点头确认，确认后就正式保存。"
         result = context.final_result or AgentResult(
             kind="整理", title="已完成", summary="都处理好了", suggestions=[]
         )

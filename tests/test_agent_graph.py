@@ -134,6 +134,38 @@ async def test_finish_event_carries_report_preview(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_chat_only_skips_analysis_nodes_and_answers_directly(monkeypatch):
+    """无文件的自由提问应像普通聊天：只跑整理师和教练，直接完成。"""
+    async def fail_review(ctx, context, period):
+        raise AssertionError("无文件聊天不应运行复盘师")
+
+    async def fail_profile(ctx, context, period):
+        raise AssertionError("无文件聊天不应运行画像师")
+
+    monkeypatch.setattr("apps.api.agents.nodes.generate_review", fail_review)
+    monkeypatch.setattr("apps.api.agents.nodes.generate_profile", fail_profile)
+
+    graph = build_workspace_graph(_tool_ctx(FakeGateway("这是直接聊天得到的回答。")))
+    final = await graph.ainvoke(_state(TaskIntent.FREE))
+
+    assert final["stage"] == "DONE"
+    roles = [e["role"] for e in final["events"] if e.get("role")]
+    assert "整理师" in roles
+    assert "问答教练" in roles
+    assert "复盘师" not in roles
+    assert "画像师" not in roles
+    assert "审核员" not in roles
+    context = _context(final)
+    assert context.answer == "这是直接聊天得到的回答。"
+    assert context.final_result is not None
+    assert context.final_result.kind == "问答"
+    assert context.final_result.summary == "这是直接聊天得到的回答。"
+    result_events = [event for event in final["events"] if event.get("result")]
+    assert len(result_events) == 1
+    assert not result_events[0].get("confirm_prompt")
+
+
+@pytest.mark.asyncio
 async def test_failed_review_still_points_to_report(monkeypatch):
     async def fake_review(ctx, context, period):
         return ToolResult(

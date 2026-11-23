@@ -51,7 +51,8 @@ async def test_create_task_returns_friendly_stage_and_confirm_flow(client, monke
     assert response.status_code == 201
     body = response.json()
     task_key = body["task_id"]
-    assert body["stage"] in ("WAITING_CONFIRM", "FAILED")
+    # 没有文件时走自由对话链路，直接完成，不需要确认闸门
+    assert body["stage"] in ("DONE", "FAILED")
     assert body["recommend_reason"]
 
     status = await client.get(f"/api/v1/workspace/tasks/{task_key}", headers=headers)
@@ -100,6 +101,41 @@ async def test_free_question_carries_profile_and_history_context(client, monkeyp
     payload = chat_requests[0].messages[1]["content"]
     assert "画像" in payload
     assert "相关记录" in payload
+
+
+@pytest.mark.asyncio
+async def test_custom_direction_reaches_chat_prompt(client, monkeypatch):
+    """前端发的 custom_direction 应真正进入教练提示词（修复驼峰字段丢失）。"""
+    captured: list = []
+
+    class CapturingGateway(FakeGateway):
+        async def complete(self, request, meter=None):
+            captured.append(request)
+            return SimpleNamespace(content="好的，我会按你的要求回答。", data=None)
+
+    async def fake_build(session, user_id, **kwargs):
+        return CapturingGateway(), None, "fake-model", None
+
+    monkeypatch.setattr("apps.api.workspace.service.build_gateway_for_user", fake_build)
+
+    headers = await _register_and_login(client)
+    response = await client.post(
+        "/api/v1/workspace/tasks",
+        json={
+            "message": "我该不该换工作",
+            "direction": "free",
+            "custom_direction": "请用苏格拉底式提问回应我",
+            "files": [],
+            "model": {"provider": "deepseek", "credential_mode": "本机配置"},
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201
+    chat_requests = [item for item in captured if getattr(item, "task", "") == "agent_chat"]
+    assert chat_requests
+    payload = chat_requests[0].messages[1]["content"]
+    assert "苏格拉底式提问" in payload
+    assert response.json()["stage"] == "DONE"
 
 
 @pytest.mark.asyncio

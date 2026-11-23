@@ -52,7 +52,7 @@ async def organizer_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> d
     updates: dict = _emit(state, AgentRole.ORGANIZER, "整理师正在梳理你提供的内容…")
     files = [FileInput.model_validate(item) for item in state.get("files", [])]
     if not files:
-        updates.update(_emit(state, AgentRole.ORGANIZER, "没有文件，直接用你的描述继续", done=True))
+        updates.update(_emit(state, AgentRole.ORGANIZER, "收到，我来看看怎么帮你", done=True))
         return updates
     result = await ingest_and_extract(tool_ctx, files)
     if result.ok:
@@ -100,7 +100,11 @@ async def coach_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dict:
     if _intent(state) not in (TaskIntent.FREE, TaskIntent.CONVERSATION):
         return {}
     context = _context(state)
-    updates = _emit(state, AgentRole.COACH, "问答教练正在翻找相关记录…")
+    has_files = bool(state.get("files"))
+    start_message = (
+        "问答教练正在翻找相关记录…" if has_files else "问答教练正在想怎么回答…"
+    )
+    updates = _emit(state, AgentRole.COACH, start_message)
     context.answer = await _coach_answer(tool_ctx, state)
     _write_context(updates, context)
     updates.update(_emit(state, AgentRole.COACH, "教练已经准备好回答", done=True))
@@ -131,14 +135,33 @@ async def auditor_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dic
     return updates
 
 
-def finish_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dict:
-    """汇总最终结果，并把结果卡片一起推进对话流。"""
+def finish_node(
+    state: WorkspaceState, tool_ctx: AgentToolContext, *, chat_only: bool = False
+) -> dict:
+    """汇总最终结果，并把结果卡片一起推进对话流。
+
+    纯聊天不需要确认闸门：教练已经直接回答完，直接标记完成即可。
+    """
     context = _context(state)
-    result_payload = (
-        {"result": context.final_result.model_dump(mode="json")}
-        if context.final_result is not None
-        else None
-    )
+    result = context.final_result or _build_result(state, context, intent=_intent(state))
+    context.final_result = result
+    result_payload = {"result": result.model_dump(mode="json")}
+
+    if chat_only:
+        return {
+            "stage": "DONE",
+            "events": state.get("events", [])
+            + [
+                AgentEvent(
+                    state="完成",
+                    message="回答好了",
+                    stage="DONE",
+                    result=result_payload,
+                ).model_dump()
+            ],
+            "context": context.model_dump(mode="json"),
+        }
+
     return {
         "stage": "WAITING_CONFIRM",
         "events": state.get("events", [])
@@ -174,11 +197,11 @@ def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: Task
             next_label="再聊几句",
             report_id=report_id,
         )
-    if intent == TaskIntent.FREE and context.answer:
+    if intent == TaskIntent.FREE:
         return AgentResult(
             kind="问答",
             title=label,
-            summary=context.answer,
+            summary=context.answer or "我还没想好怎么回答，换个说法再问问看。",
             suggestions=["换个角度再问一次", "上传对话，让回答更有依据"],
             next_label="继续提问",
             report_id=report_id,
@@ -193,22 +216,37 @@ def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: Task
     )
 
 
+def _chat_system_prompt(has_evidence: bool) -> str:
+    if has_evidence:
+        return (
+            "你是 Cairn 的成长教练。用户的问题有相关对话记录和成长画像作为背景。"
+            "自然、像朋友一样回答：画像只作背景不要照抄；涉及用户个人经历的具体结论"
+            "要有记录支撑，证据不足的部分坦诚说明。不要输出字段名或编号。"
+        )
+    return (
+        "你是 Cairn 的陪伴式成长教练，正在和用户自然聊天。"
+        "直接、真诚地回答用户的问题，可以给建议、提问、共情，像两个人在对话。"
+        "如果用户提到画像背景，可以作为参考，但不要照抄，也不要追问用户上传文件。"
+        "不要说「没有相关记录无法回答」，也不要输出字段名或编号。"
+        "回答用自然中文，简洁但有温度。"
+    )
+
+
 async def _coach_answer(tool_ctx: AgentToolContext, state: WorkspaceState) -> str:
     from apps.api.gateway.schemas import GatewayOptions, GatewayRequest
 
     message = state.get("user_message", "") or "请帮我做个总结"
     context = await coach_context(tool_ctx, message)
+    supplement = (state.get("supplement") or "").strip()
+    has_evidence = bool(context.get("相关记录"))
+    user_payload = {"问题": message, **context}
+    if supplement:
+        user_payload["补充要求"] = supplement
     request = GatewayRequest(
         task="agent_chat",
         messages=[
-            {
-                "role": "system",
-                "content": "你是成长教练。结合用户的成长画像和相关对话碎片回答：画像只是背景，不要照抄；结论必须有碎片支撑，证据不足时坦诚说明，不要编造。",
-            },
-            {
-                "role": "user",
-                "content": json.dumps({"问题": message, **context}, ensure_ascii=False),
-            },
+            {"role": "system", "content": _chat_system_prompt(has_evidence)},
+            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
         ],
         options=GatewayOptions(),
         user_id=tool_ctx.user_id,

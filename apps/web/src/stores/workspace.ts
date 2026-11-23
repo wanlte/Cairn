@@ -365,6 +365,7 @@ export const workspace = {
 
 function workingText(): string {
   const label = DIRECTION_LABELS[state.direction]
+  if (state.files.length === 0) return '正在想怎么回答你…'
   if (state.direction === 'growth') return '正在根据你提供的对话更新成长画像…'
   if (state.direction === 'free') return '正在理解你的问题，并去对话里找依据…'
   return `正在按「${label}」梳理对话，几位小伙伴要忙一会儿…`
@@ -409,7 +410,10 @@ function showResult(raw: AgentResult | null | undefined): void {
   const existing = [...state.messages]
     .reverse()
     .find((item) => item.kind === 'result')
+  // 只有带报告编号的结果（复盘/画像修订）才更新同一张卡片；
+  // 每轮问答都是独立回答，应当新增卡片，不能被上一轮的同名标题吞掉。
   if (
+    result.report_id != null &&
     existing &&
     existing.result?.title === result.title &&
     existing.result?.report_id === result.report_id

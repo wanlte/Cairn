@@ -159,6 +159,16 @@ export interface WorkspaceTaskPayload {
   model: ModelSelection
 }
 
+function toBackendModel(model: ModelSelection) {
+  return {
+    provider: model.provider,
+    model: model.model,
+    credential_mode: model.credentialMode,
+    credential_id: model.credentialId,
+    temporary_api_key: model.temporaryKey,
+  }
+}
+
 export interface WorkspaceEvent {
   stage: TaskStage
   bubble?: AgentBubble
@@ -186,7 +196,13 @@ export const workspaceApi = {
   quickModels: () => api.get<{ options: QuickModelOption[] }>('/credentials/quick-options'),
 
   createTask: (payload: WorkspaceTaskPayload) =>
-    api.post<WorkspaceTaskResponse>('/workspace/tasks', payload),
+    api.post<WorkspaceTaskResponse>('/workspace/tasks', {
+      message: payload.message,
+      direction: payload.direction,
+      custom_direction: payload.customDirection,
+      files: payload.files,
+      model: toBackendModel(payload.model),
+    }),
 
   task: (taskId: string) => api.get<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}`),
 
@@ -194,7 +210,11 @@ export const workspaceApi = {
     api.stream(`/workspace/tasks/${taskId}/events`, onEvent),
 
   confirm: (taskId: string, body: WorkspaceConfirmBody) =>
-    api.post<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}/confirm`, body),
+    api.post<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}/confirm`, {
+      confirmed: body.confirmed,
+      note: body.note,
+      model: toBackendModel(body.model),
+    }),
 }
 
 export const reviewApi = {
