@@ -46,12 +46,13 @@ def _context(final) -> ContextBundle:
 
 
 @pytest.mark.asyncio
-async def test_graph_free_intent_runs_review_coach_audit_finish(monkeypatch):
+async def test_graph_free_intent_runs_coach_not_review_even_with_files(monkeypatch):
+    """自由对话只看意图：即使带附件也不跑复盘师和审核闸门。"""
     async def fake_ingest(ctx, files):
         return ToolResult(ok=True, data={"conversation_ids": [1], "turn_count": 2, "fragment_count": 3})
 
     async def fake_review(ctx, context, period):
-        return ToolResult(ok=True, message="复盘写好了", data={"review_id": 9, "summary": "复盘结论：进展不错。"})
+        raise AssertionError("自由对话不应该调用复盘师")
 
     monkeypatch.setattr("apps.api.agents.nodes.ingest_and_extract", fake_ingest)
     monkeypatch.setattr("apps.api.agents.nodes.generate_review", fake_review)
@@ -59,15 +60,15 @@ async def test_graph_free_intent_runs_review_coach_audit_finish(monkeypatch):
     graph = build_workspace_graph(_tool_ctx(FakeGateway()))
     final = await graph.ainvoke(_state(TaskIntent.FREE, files=[{"name": "a.md", "content": "对话内容"}]))
 
-    assert final["stage"] == "WAITING_CONFIRM"
+    assert final["stage"] == "DONE"
     roles = [e["role"] for e in final["events"] if e.get("role")]
     assert "整理师" in roles
-    assert "复盘师" in roles
+    assert "复盘师" not in roles
     assert "问答教练" in roles
-    assert "审核员" in roles
-    assert "画像师" not in roles
+    assert "审核员" not in roles
     context = _context(final)
     assert context.final_result is not None
+    assert context.final_result.kind == "问答"
     assert context.answer
 
 

@@ -22,6 +22,7 @@ from apps.api.extraction.schemas import (
     FragmentResponse,
 )
 from apps.api.gateway.factory import build_gateway_for_user
+from apps.api.gateway.metering import session_meter
 from apps.api.gateway.schemas import (
     GatewayErrorCode,
     GatewayOptions,
@@ -121,6 +122,7 @@ class ExtractionService:
             try:
                 output = await self._extract_turn(
                     gateway=gateway,
+                    meter=session_meter(session),
                     turn=turn,
                     user_id=user_id,
                     run_id=run.id,
@@ -144,6 +146,7 @@ class ExtractionService:
         self,
         *,
         gateway,
+        meter,
         turn: TurnPair,
         user_id: int,
         run_id: int,
@@ -172,7 +175,7 @@ class ExtractionService:
             ),
             user_id=user_id,
         )
-        response = await gateway.complete(request)
+        response = await gateway.complete(request, meter=meter)
         if not response.data:
             raise UnifiedError(
                 GatewayErrorCode.INVALID_OUTPUT, "抽取结果为空", retryable=False

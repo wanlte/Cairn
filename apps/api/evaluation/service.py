@@ -23,6 +23,7 @@ from apps.api.extraction.schemas import (
     ExtractionOutput,
 )
 from apps.api.gateway.factory import build_gateway_for_user
+from apps.api.gateway.metering import session_meter
 from apps.api.gateway.schemas import GatewayOptions, GatewayRequest, ResponseFormat
 from apps.api.retrieval.schemas import RetrievalSearchRequest
 from apps.api.retrieval.service import RetrievalService
@@ -34,10 +35,13 @@ DATASETS = {
     "extraction_50.jsonl": "抽取字段准确率合成标签集",
     "retrieval_30.jsonl": "检索 Recall@5 合成标签集",
     "review_30.jsonl": "复盘一致率合成标签集",
+    "human/extraction_50.jsonl": "真实对话抽取标注集（samples 来源，AI 辅助标注）",
+    "human/retrieval_30.jsonl": "真实对话检索标注集（samples 来源，AI 辅助标注）",
+    "human/review_30.jsonl": "真实对话复盘标注集（samples 来源，AI 辅助标注）",
 }
 
 
-def load_dataset(name: str, limit: int | None = None) -> list[dict]:
+def load_dataset(name: str, limit: int | None = None, offset: int = 0) -> list[dict]:
     if name not in DATASETS:
         raise AppError("DATASET_NOT_FOUND", f"未知数据集：{name}", 404)
     path = LABELS_ROOT / name
@@ -46,6 +50,7 @@ def load_dataset(name: str, limit: int | None = None) -> list[dict]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+    rows = rows[offset:]
     return rows[:limit] if limit else rows
 
 
@@ -54,7 +59,7 @@ def list_datasets() -> list[DatasetInfo]:
         DatasetInfo(
             name=name,
             rows=len(load_dataset(name)),
-            synthetic=True,
+            synthetic=not name.startswith("human/"),
             description=description,
         )
         for name, description in DATASETS.items()
@@ -104,7 +109,7 @@ class EvaluationService:
         self, session: AsyncSession, user_id: int, request: EvaluationRunRequest
     ) -> ExtractionEvalResponse:
         dataset = request.dataset or "extraction_50.jsonl"
-        rows = load_dataset(dataset, request.limit)
+        rows = load_dataset(dataset, request.limit, request.offset)
         settings = get_settings()
         gateway, _credential_id, _model, _provider = await build_gateway_for_user(
             session,
@@ -137,7 +142,8 @@ class EvaluationService:
                         timeout_seconds=settings.gateway_read_timeout_review,
                     ),
                     user_id=user_id,
-                )
+                ),
+                meter=session_meter(session),
             )
             try:
                 actual = _flatten_actual(ExtractionOutput.model_validate(response.data or {}))
@@ -172,7 +178,7 @@ class EvaluationService:
         self, session: AsyncSession, user_id: int, request: EvaluationRunRequest
     ) -> ReviewEvalResponse:
         dataset = request.dataset or "review_30.jsonl"
-        rows = load_dataset(dataset, request.limit)
+        rows = load_dataset(dataset, request.limit, request.offset)
         report = (
             await session.execute(
                 select(ReviewReport)
@@ -245,7 +251,7 @@ class EvaluationService:
         self, session: AsyncSession, user_id: int, request: EvaluationRunRequest
     ) -> RetrievalEvalResponse:
         dataset = request.dataset or "retrieval_30.jsonl"
-        rows = load_dataset(dataset, request.limit)
+        rows = load_dataset(dataset, request.limit, request.offset)
         service = RetrievalService()
         hit = 0
         failures: list[dict] = []

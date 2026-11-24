@@ -13,6 +13,7 @@ from apps.api.db.models.extraction import Fragment
 from apps.api.db.models.profile import ProfileClaim, ProfileSnapshot
 from apps.api.errors import AppError
 from apps.api.gateway.factory import build_gateway_for_user
+from apps.api.gateway.metering import session_meter
 from apps.api.gateway.schemas import GatewayOptions, GatewayRequest, ResponseFormat
 from apps.api.profile.schemas import (
     PROFILE_JSON_SCHEMA,
@@ -205,7 +206,7 @@ class ProfileService:
         )
 
         try:
-            response = await gateway.complete(gateway_request)
+            response = await gateway.complete(gateway_request, meter=session_meter(session))
             if not response.data:
                 raise AppError("INVALID_PROFILE_OUTPUT", "画像输出为空", 502)
             output = ProfileOutput.model_validate(response.data)

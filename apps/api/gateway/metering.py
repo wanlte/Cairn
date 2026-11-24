@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -91,6 +92,17 @@ async def record_call(session: AsyncSession, record: MeteringRecord) -> LlmCallL
     session.add(log)
     await session.flush()
     return log
+
+
+def session_meter(
+    session: AsyncSession,
+) -> Callable[[MeteringRecord], Awaitable[None]]:
+    """把每次模型调用写入 llm_call_log；事务仍由调用方的 session 统一管理。"""
+
+    async def meter(record: MeteringRecord) -> None:
+        await record_call(session, record)
+
+    return meter
 
 
 def log_to_dict(log: LlmCallLog) -> dict[str, Any]:

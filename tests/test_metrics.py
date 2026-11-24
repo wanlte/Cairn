@@ -93,3 +93,34 @@ async def test_llm_calls_drive_cost_and_quality(client, db_session):
     system = await client.get("/api/v1/metrics/system", headers=headers)
     assert system.json()["latency_p95_ms"] == 1200
     assert system.json()["success_rate"] == 1.0
+
+
+async def test_session_meter_records_llm_call(client, db_session):
+    from apps.api.gateway.metering import session_meter
+    from apps.api.gateway.schemas import MeteringRecord, ProviderName, TokenUsage
+
+    headers = await auth_headers(client, "session-meter@example.com")
+    user = (
+        await db_session.execute(
+            select(User).where(User.email == "session-meter@example.com")
+        )
+    ).scalar_one()
+
+    meter = session_meter(db_session)
+    await meter(
+        MeteringRecord(
+            user_id=user.id,
+            task="extract",
+            provider=ProviderName.DEEPSEEK,
+            model="deepseek-chat",
+            usage=TokenUsage(prompt_tokens=200, completion_tokens=100),
+            latency_ms=800,
+            retry_count=0,
+            status="ok",
+        )
+    )
+    await db_session.commit()
+
+    cost = await client.get("/api/v1/metrics/cost", headers=headers)
+    assert cost.json()["total_tokens"] == 300
+    assert cost.json()["total_calls"] == 1

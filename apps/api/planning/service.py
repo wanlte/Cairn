@@ -11,6 +11,7 @@ from apps.api.db.models.extraction import Fragment
 from apps.api.db.models.planning import PlanBlueprint, WeeklyFill
 from apps.api.errors import AppError
 from apps.api.gateway.factory import build_gateway_for_user
+from apps.api.gateway.metering import session_meter
 from apps.api.gateway.schemas import GatewayOptions, GatewayRequest, ResponseFormat
 from apps.api.planning.schemas import (
     PLAN_JSON_SCHEMA,
@@ -83,7 +84,7 @@ class PlanningService:
             user_id=user_id,
         )
         try:
-            response = await gateway.complete(gateway_request)
+            response = await gateway.complete(gateway_request, meter=session_meter(session))
             if not response.data:
                 raise AppError("INVALID_PLAN_OUTPUT", "规划输出为空", 502)
             output = PlanOutput.model_validate(response.data)

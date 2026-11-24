@@ -12,6 +12,7 @@ from apps.api.db.models.ingestion import RawConversation, TurnPair
 from apps.api.db.models.profile import ProfileClaim, ProfileSnapshot
 from apps.api.db.models.review import ReviewItem
 from apps.api.gateway.factory import build_gateway_for_user
+from apps.api.gateway.metering import session_meter
 from apps.api.gateway.schemas import (
     GatewayErrorCode,
     GatewayOptions,
@@ -290,7 +291,8 @@ class RetrievalService:
                     output_schema=schema,
                 ),
                 user_id=user_id,
-            )
+            ),
+            meter=session_meter(session),
         )
         scores = {
             int(row["fragment_id"]): float(row["score"])
@@ -361,7 +363,8 @@ class RetrievalService:
                 ],
                 options=GatewayOptions(),
                 user_id=user_id,
-            )
+            ),
+            meter=session_meter(session),
         )
         return RetrievalAskResponse(
             answer=response.content,

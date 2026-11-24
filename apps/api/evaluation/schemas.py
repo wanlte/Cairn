@@ -7,6 +7,7 @@ from apps.api.gateway.credential_selection import CredentialSelection
 
 class EvaluationRunRequest(CredentialSelection):
     limit: int | None = Field(default=None, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
     dataset: str | None = None
 
 

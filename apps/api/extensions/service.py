@@ -19,6 +19,7 @@ from apps.api.extensions.schemas import (
 )
 from apps.api.gateway.credential_selection import CredentialSelection
 from apps.api.gateway.factory import build_gateway_for_user
+from apps.api.gateway.metering import session_meter
 from apps.api.gateway.schemas import GatewayOptions, GatewayRequest, ResponseFormat
 from apps.api.profile.service import profile_service
 
@@ -110,7 +111,7 @@ class ExtensionsService:
             ),
             user_id=user_id,
         )
-        response = await gateway.complete(gateway_request)
+        response = await gateway.complete(gateway_request, meter=session_meter(session))
         if not response.data:
             raise AppError("EXTENSION_OUTPUT_EMPTY", "没有拿到结果", 502)
         return response.data

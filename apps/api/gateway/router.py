@@ -10,13 +10,12 @@ from apps.api.credentials import service as credential_service
 from apps.api.db.base import get_session
 from apps.api.db.models.user import User
 from apps.api.errors import AppError
-from apps.api.gateway.metering import record_call
+from apps.api.gateway.metering import session_meter
 from apps.api.gateway.providers import build_provider
 from apps.api.gateway.schemas import (
     GatewayOptions,
     GatewayRequest,
     GatewayResponse,
-    MeteringRecord,
     ProviderName,
     UnifiedError,
 )
@@ -134,8 +133,7 @@ async def complete(
 
     gateway = ModelGateway(providers)
 
-    async def meter(record: MeteringRecord) -> None:
-        await record_call(session, record)
+    meter = session_meter(session)
 
     request = GatewayRequest(
         task=payload.task,
