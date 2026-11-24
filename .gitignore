@@ -18,3 +18,9 @@ scripts/gateway_demo.py
 # 工具生成目录
 .codebuddy/
 .playwright-cli/
+
+# 本地运行日志
+backend.log
+backend.err
+web.log
+web.err

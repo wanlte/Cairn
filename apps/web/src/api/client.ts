@@ -246,6 +246,11 @@ export const workspaceApi = {
   history: (taskId: string) =>
     api.get<WorkspaceHistory>(`/workspace/tasks/${taskId}/history`),
 
+  remove: (taskId: string, keepProfile: boolean) =>
+    api.delete<{ deleted: boolean; profile_claims_removed: number }>(
+      `/workspace/tasks/${taskId}?keep_profile=${keepProfile}`,
+    ),
+
   events: (taskId: string, onEvent: (data: WorkspaceEvent) => void) =>
     api.stream(`/workspace/tasks/${taskId}/events`, onEvent),
 
@@ -263,6 +268,11 @@ export const reviewApi = {
   get: (reportId: number) => api.get<ReviewReport>(`/reviews/${reportId}`),
 
   exportText: (reportId: number) => api.getText(`/reviews/${reportId}/export`),
+
+  remove: (reportId: number, keepProfile: boolean) =>
+    api.delete<{ deleted: boolean; profile_claims_removed: number }>(
+      `/reviews/${reportId}?keep_profile=${keepProfile}`,
+    ),
 
   verifyAction: (actionId: number, note?: string) =>
     api.post<ActionItemRecord>(`/reviews/action-items/${actionId}/verify`, { note: note || null }),

@@ -125,9 +125,16 @@ function pushMessage(role: ConversationMessage['role'], text: string, extra: Par
   })
 }
 
+let noticeTimer: ReturnType<typeof setTimeout> | null = null
+
 function notify(message: string, kind: 'info' | 'error' | 'success' = 'info'): void {
   state.notice = message
   state.noticeKind = kind
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => {
+    state.notice = ''
+    noticeTimer = null
+  }, 3200)
 }
 
 function resetModelTempKeyAfterTask(): void {
@@ -245,7 +252,11 @@ export const workspace = {
     }
 
     if (added.length) {
-      pushMessage('用户', '', { kind: 'file', fileUids: added.map((item) => item.uid) })
+      pushMessage('用户', '', {
+        kind: 'file',
+        fileUids: added.map((item) => item.uid),
+        files: added.map((item) => ({ ...item })),
+      })
     }
 
     for (const { file, item } of pending) {
@@ -266,8 +277,11 @@ export const workspace = {
     if (index >= 0) state.files.splice(index, 1)
     for (const message of state.messages) {
       if (message.fileUids) message.fileUids = message.fileUids.filter((item) => item !== fileUid)
+      if (message.files) message.files = message.files.filter((item) => item.uid !== fileUid)
     }
-    state.messages = state.messages.filter((message) => message.kind !== 'file' || (message.fileUids?.length ?? 0) > 0)
+    state.messages = state.messages.filter(
+      (message) => message.kind !== 'file' || (message.files?.length ?? message.fileUids?.length ?? 0) > 0,
+    )
     recommend()
   },
 
@@ -279,7 +293,7 @@ export const workspace = {
   async send(): Promise<void> {
     const text = state.input.trim()
     if (!text && state.files.length === 0) {
-      notify('先说点什么，或带一份对话文件过来', 'error')
+      notify('先说点什么，或发个链接、带一份文件过来', 'error')
       return
     }
     if (state.busy) return
@@ -317,6 +331,11 @@ export const workspace = {
         model: { ...state.model },
       })
       void metricsApi.track('task_started', { direction: state.direction })
+      state.files.splice(0)
+      state.direction = 'free'
+      state.customDirection = ''
+      state.selectedPromptIds.splice(0)
+      state.recommendReason = ''
       activeStreamTask = response.task_id
       confirmedTask = ''
       state.taskId = response.task_id
@@ -408,6 +427,15 @@ export const workspace = {
     } catch (err) {
       notify(friendlyError(err), 'error')
     }
+  },
+
+  async removeTask(taskId: string, keepProfile: boolean): Promise<{ deleted: boolean; profile_claims_removed: number }> {
+    const result = await workspaceApi.remove(taskId, keepProfile)
+    state.history = state.history.filter((item) => item.task_id !== taskId)
+    if (state.taskId === taskId) {
+      state.taskId = ''
+    }
+    return result
   },
 
   async tidyHistory(taskIds: string[], archived: boolean): Promise<void> {

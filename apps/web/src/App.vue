@@ -38,7 +38,7 @@ function logout(): void {
   </div>
   <div v-else class="min-h-screen bg-canvas">
     <header class="fixed inset-x-0 top-0 z-40 h-[68px] border-b border-white/70 bg-white/80 backdrop-blur-xl">
-      <div class="mx-auto flex h-full max-w-[1200px] items-center justify-between px-5">
+      <div class="mx-auto flex h-full max-w-[1440px] items-center justify-between px-5">
         <button type="button" class="flex items-center gap-2.5" @click="go('home')">
           <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-teal text-white shadow-glow">
             <Sparkles :size="18" />

@@ -15,8 +15,11 @@ import {
   LoaderCircle,
   RotateCcw,
   Sparkles,
+  Trash2,
 } from 'lucide-vue-next'
 import { reviewApi } from '../api/client'
+import { workspace } from '../stores/workspace'
+import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import JudgmentCard from '../components/JudgmentCard.vue'
 import type { ActionItemRecord, ReviewItem, ReviewReport } from '../types'
 import {
@@ -45,6 +48,8 @@ const loading = ref(false)
 const error = ref('')
 const busyId = ref<number | null>(null)
 const noteDrafts = ref<Record<number, string>>({})
+const deleteTarget = ref<ReviewReport | null>(null)
+const deleting = ref(false)
 
 const reportId = computed(() => {
   const raw = route.params.id
@@ -88,6 +93,28 @@ async function load(): Promise<void> {
     current.value = null
   } finally {
     loading.value = false
+  }
+}
+
+async function confirmDelete(keepProfile: boolean): Promise<void> {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  const target = deleteTarget.value
+  try {
+    const result = await reviewApi.remove(target.id, keepProfile)
+    const suffix = result.profile_claims_removed
+      ? `，同时清掉了 ${result.profile_claims_removed} 条画像结论`
+      : keepProfile ? '，画像保留着' : ''
+    workspace.notify(`复盘已删除${suffix}`, 'success')
+    deleteTarget.value = null
+    if (current.value?.id === target.id) {
+      await router.push({ name: 'reports' })
+    }
+    await load()
+  } catch (err) {
+    workspace.notify(friendlyError(err), 'error')
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -182,6 +209,9 @@ async function exportReport(): Promise<void> {
           <button v-if="reportId && current" type="button" class="btn ghost small" @click="exportReport">
             <Download :size="14" class="mr-1 inline" /> 导出这份记录
           </button>
+          <button v-if="reportId && current" type="button" class="btn ghost small !text-[#b42318] hover:!border-[#b42318]/40" @click="deleteTarget = current">
+            <Trash2 :size="14" class="mr-1 inline" /> 删除这份复盘
+          </button>
         </div>
       </div>
 
@@ -201,31 +231,36 @@ async function exportReport(): Promise<void> {
 
         <div v-else class="space-y-4">
           <div class="grid gap-3 sm:grid-cols-2">
-            <button
+            <div
               v-for="report in reports"
               :key="report.id"
-              type="button"
               class="group rounded-[18px] border border-white/80 bg-white/85 p-5 text-left shadow-soft backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-brand/30"
-              @click="openReport(report.id)"
             >
-              <div class="mb-3 flex items-center justify-between gap-2">
-                <p class="text-[15px] font-semibold text-ink">{{ friendlyDate(report.created_at) }}</p>
-                <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold" :class="report.status === 'DONE' ? 'bg-teal-50 text-[#0f766e]' : 'bg-[#fff5e6] text-[#b45309]'">
-                  {{ friendlyReportStatus(report.status) }}
-                </span>
+              <button type="button" class="w-full text-left" @click="openReport(report.id)">
+                <div class="mb-3 flex items-center justify-between gap-2">
+                  <p class="text-[15px] font-semibold text-ink">{{ friendlyDate(report.created_at) }}</p>
+                  <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold" :class="report.status === 'DONE' ? 'bg-teal-50 text-[#0f766e]' : 'bg-[#fff5e6] text-[#b45309]'">
+                    {{ friendlyReportStatus(report.status) }}
+                  </span>
+                </div>
+                <div class="flex flex-wrap gap-2 text-[11px] text-[#5b6478]">
+                  <span class="rounded-full bg-[#f1f4f9] px-2.5 py-1">回看 {{ Number(report.overview?.dialogue_count) || 0 }} 段对话</span>
+                  <span class="rounded-full bg-[#f1f4f9] px-2.5 py-1">{{ sectionItems(report, 'key_event').length }} 件值得回看</span>
+                  <span class="rounded-full bg-[#f1f4f9] px-2.5 py-1">{{ report.action_items.length }} 个行动项</span>
+                </div>
+                <p v-if="comparisonText(report)" class="mt-3 line-clamp-2 text-[12px] leading-relaxed text-[#7a839a]">
+                  {{ comparisonText(report) }}
+                </p>
+              </button>
+              <div class="mt-4 flex items-center justify-between">
+                <button type="button" class="flex items-center gap-1 text-[12px] font-semibold text-brand" @click="openReport(report.id)">
+                  打开看看 <ArrowRight :size="13" class="transition-transform group-hover:translate-x-0.5" />
+                </button>
+                <button type="button" class="flex items-center gap-1 text-[11px] font-medium text-[#9aa2b4] transition hover:text-[#b42318]" @click="deleteTarget = report">
+                  <Trash2 :size="12" /> 删除
+                </button>
               </div>
-              <div class="flex flex-wrap gap-2 text-[11px] text-[#5b6478]">
-                <span class="rounded-full bg-[#f1f4f9] px-2.5 py-1">回看 {{ Number(report.overview?.dialogue_count) || 0 }} 段对话</span>
-                <span class="rounded-full bg-[#f1f4f9] px-2.5 py-1">{{ sectionItems(report, 'key_event').length }} 件值得回看</span>
-                <span class="rounded-full bg-[#f1f4f9] px-2.5 py-1">{{ report.action_items.length }} 个行动项</span>
-              </div>
-              <p v-if="comparisonText(report)" class="mt-3 line-clamp-2 text-[12px] leading-relaxed text-[#7a839a]">
-                {{ comparisonText(report) }}
-              </p>
-              <p class="mt-4 flex items-center gap-1 text-[12px] font-semibold text-brand">
-                打开看看 <ArrowRight :size="13" class="transition-transform group-hover:translate-x-0.5" />
-              </p>
-            </button>
+            </div>
           </div>
 
           <section v-if="trend.length > 1" class="rounded-[20px] border border-white/80 bg-white/85 p-6 shadow-soft">
@@ -463,5 +498,14 @@ async function exportReport(): Promise<void> {
 
       <p class="mt-10 text-center text-[11px] text-[#b0b6c4]">记录留在这里，随时回来对照自己走过的一段路</p>
     </div>
+
+    <DeleteConfirmDialog
+      :open="Boolean(deleteTarget)"
+      title="删除这份复盘？"
+      :description="`「${deleteTarget ? friendlyDate(deleteTarget.created_at) : ''}」的复盘删除后无法恢复，请确认下面画像的处理方式。`"
+      :busy="deleting"
+      @close="deleteTarget = null"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>

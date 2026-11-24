@@ -10,6 +10,7 @@ const input = computed({
   set: (value: string) => (workspace.state.input = value),
 })
 const focused = ref(false)
+const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
 
 function send(): void {
   workspace.send()
@@ -28,7 +29,7 @@ function onKeydown(event: KeyboardEvent): void {
     class="composer group relative z-50 rounded-[24px] bg-white/90 border transition-all duration-200"
     :class="focused ? 'border-brand/50 shadow-glow' : 'border-white/80 shadow-soft'"
   >
-    <div class="border-b border-[#eef0f6] px-5 pb-3 pt-4">
+    <div class="border-b border-[#eef0f6] px-5" :class="props.compact ? 'py-2' : 'pb-3 pt-4'">
       <DirectionPicker />
     </div>
     <div v-if="workspace.selectedPrompts.value.length" class="flex flex-wrap items-center gap-1.5 px-5 pt-3 animate-fade-up">
@@ -50,21 +51,22 @@ function onKeydown(event: KeyboardEvent): void {
         </button>
       </span>
     </div>
-    <div class="flex items-start gap-3 px-5 pt-3">
-      <div class="mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-teal text-white">
+    <div class="flex items-start gap-3 px-5" :class="props.compact ? 'pt-2' : 'pt-3'">
+      <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-teal text-white" :class="props.compact ? 'mt-1' : 'mt-1.5'">
         <Sparkles :size="16" />
       </div>
       <textarea
         v-model="input"
-        rows="2"
-        class="max-h-48 min-h-[56px] w-full resize-none border-0 bg-transparent py-1.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-[#9aa2b4] focus:outline-none focus:ring-0"
+        :rows="props.compact ? 1 : 2"
+        class="max-h-48 w-full resize-none border-0 bg-transparent py-1.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-[#9aa2b4] focus:outline-none focus:ring-0"
+        :class="props.compact ? 'min-h-[38px]' : 'min-h-[56px]'"
         placeholder="说说你想整理什么，比如「帮我复盘这一周」"
         @focus="focused = true"
         @blur="focused = false"
         @keydown="onKeydown"
       />
     </div>
-    <div class="flex items-center justify-between px-4 pb-3 pt-1">
+    <div class="flex items-center justify-between px-4 pt-1" :class="props.compact ? 'pb-2' : 'pb-3'">
       <div class="flex items-center gap-3 pl-1">
         <FileDropzone />
         <span class="text-[12px] text-[#9aa2b4]">回车发送 · Shift 换行</span>

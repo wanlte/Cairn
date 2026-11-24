@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   Archive,
   ArchiveRestore,
@@ -8,14 +8,21 @@ import {
   LoaderCircle,
   Pin,
   Settings2,
+  Trash2,
   X,
 } from 'lucide-vue-next'
 import { workspace } from '../stores/workspace'
 import type { WorkspaceTaskResponse } from '../api/client'
+import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
+
+const props = withDefaults(defineProps<{ inline?: boolean }>(), { inline: false })
 
 const open = ref(false)
+const panelVisible = computed(() => props.inline || open.value)
 const tidyMode = ref(false)
 const selected = ref<string[]>([])
+const deleteTarget = ref<WorkspaceTaskResponse | null>(null)
+const deleting = ref(false)
 
 const history = computed(() => workspace.state.history)
 const isArchived = computed(() => workspace.state.historyArchived)
@@ -40,6 +47,17 @@ function toggleSidebar(): void {
   open.value = !open.value
   if (open.value) void workspace.loadHistory()
 }
+
+onMounted(() => {
+  if (props.inline) void workspace.loadHistory()
+})
+
+watch(
+  () => workspace.state.taskId,
+  () => {
+    if (props.inline) void workspace.loadHistory()
+  },
+)
 
 function switchView(archived: boolean): void {
   selected.value = []
@@ -74,11 +92,28 @@ function exitTidy(): void {
   tidyMode.value = false
   selected.value = []
 }
+
+async function confirmDelete(keepProfile: boolean): Promise<void> {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  const target = deleteTarget.value
+  try {
+    const result = await workspace.removeTask(target.task_id, keepProfile)
+    const suffix = result.profile_claims_removed
+      ? `，同时清掉了 ${result.profile_claims_removed} 条画像结论`
+      : keepProfile ? '，画像保留着' : ''
+    workspace.notify(`对话已删除${suffix}`, 'success')
+    deleteTarget.value = null
+  } finally {
+    deleting.value = false
+  }
+}
 </script>
 
 <template>
-  <div class="history-root">
+  <div class="history-root" :class="inline ? 'history-root-inline' : ''">
     <button
+      v-if="!inline"
       type="button"
       class="history-toggle"
       :class="open ? 'active' : ''"
@@ -88,13 +123,13 @@ function exitTidy(): void {
       <span>历史</span>
     </button>
 
-    <aside v-if="open" class="history-panel">
+    <aside v-if="panelVisible" class="history-panel" :class="inline ? 'inline' : ''">
       <div class="flex items-center justify-between border-b border-[#eef0f6] px-4 py-3">
         <div>
           <p class="text-[14px] font-semibold text-ink">历史对话</p>
           <p class="mt-0.5 text-[11px] text-muted">随时回来，接着往下聊</p>
         </div>
-        <button type="button" class="icon-btn" aria-label="收起历史栏" @click="open = false">
+        <button v-if="!inline" type="button" class="icon-btn" aria-label="收起历史栏" @click="open = false">
           <X :size="15" />
         </button>
       </div>
@@ -186,10 +221,27 @@ function exitTidy(): void {
               <ArchiveRestore v-if="task.archived" :size="13" />
               <Archive v-else :size="13" />
             </button>
+            <button
+              type="button"
+              class="icon-btn small delete"
+              title="删除这条对话"
+              @click.stop="deleteTarget = task"
+            >
+              <Trash2 :size="13" />
+            </button>
           </div>
         </div>
       </div>
     </aside>
+
+    <DeleteConfirmDialog
+      :open="Boolean(deleteTarget)"
+      title="删除这条对话？"
+      :description="`「${deleteTarget ? (deleteTarget.user_message || '一次对话').slice(0, 24) : ''}」删除后无法恢复，请确认下面画像的处理方式。`"
+      :busy="deleting"
+      @close="deleteTarget = null"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 
@@ -208,6 +260,7 @@ function exitTidy(): void {
 }
 .icon-btn:hover { background: #f4f6fa; color: #172033; }
 .icon-btn.small { height: 24px; width: 24px; }
+.icon-btn.delete:hover { background: #fef2f2; color: #b42318; }
 .view-tab {
   display: flex; align-items: center; gap: 4px; border-radius: 999px;
   padding: 4px 10px; font-size: 11px; font-weight: 600; color: #8b93a7; transition: all .2s;
@@ -230,6 +283,11 @@ function exitTidy(): void {
   flex-direction: column; overflow: hidden;
   border: 1px solid #e4e8f0; border-radius: 16px; background: #fff;
   box-shadow: 0 18px 50px rgba(23,32,51,.16); animation: fade-up .2s ease;
+}
+.history-root-inline { height: 100%; min-height: 0; }
+.history-panel.inline {
+  position: static; z-index: auto; width: 100%; height: 100%; max-height: none;
+  border-color: rgba(228,232,240,.8); box-shadow: 0 8px 24px rgba(23,32,51,.05);
 }
 @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 </style>

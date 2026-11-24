@@ -140,10 +140,7 @@ export function recommendDirection(
   }
 
   if (!best || bestScore === 0) {
-    if (files.length > 0) {
-      return { key: 'conversation', reason: '看到你带了对话文件，先从对话里帮你提炼重点' }
-    }
-    return { key: 'free', reason: '还不确定方向，你可以直接说说想了解什么' }
+    return { key: 'free', reason: '你可以直接聊，也可以发链接或文件，方向不是必须的' }
   }
 
   const reasons: Record<DirectionKey, string> = {

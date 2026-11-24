@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { AlertCircle, CheckCircle2, FileText, Info, MessagesSquare, Paperclip, Trash2 } from 'lucide-vue-next'
+import { AlertCircle, CheckCircle2, FileText, Info, LoaderCircle, MessagesSquare, Paperclip, Trash2 } from 'lucide-vue-next'
 import ChatComposer from '../components/ChatComposer.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
 import ResultCard from '../components/ResultCard.vue'
+import RightInsightPanel from '../components/RightInsightPanel.vue'
 import { workspace } from '../stores/workspace'
 import { fileSizeText, friendlyStageMessage } from '../utils/friendly'
 import type { AgentRoleLabel, UploadFileState } from '../types'
@@ -36,7 +37,8 @@ watch(
   },
 )
 
-function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
+function filesOfMessage(message: { fileUids?: string[]; files?: UploadFileState[] }): UploadFileState[] {
+  if (message.files?.length) return message.files
   return (message.fileUids || [])
     .map((uid) => workspace.state.files.find((file) => file.uid === uid))
     .filter((file): file is UploadFileState => Boolean(file))
@@ -50,28 +52,33 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
       <div class="absolute -right-16 top-40 h-72 w-72 rounded-full bg-brand-teal/10 blur-3xl animate-float" style="animation-delay: -3s"></div>
     </div>
 
-    <div class="relative mx-auto flex h-full w-full max-w-[820px] flex-col px-5">
+    <div class="relative mx-auto flex h-full w-full max-w-[1440px] gap-4 px-5">
+      <aside class="hidden w-[248px] shrink-0 flex-col pt-4 min-[1400px]:flex">
+        <HistorySidebar inline />
+      </aside>
+
+      <div class="relative mx-auto flex h-full w-full min-w-0 max-w-[820px] flex-col min-[1400px]:max-w-none min-[1400px]:flex-1">
       <div
         class="relative z-40 shrink-0 animate-fade-up"
-        :class="workspace.hasStarted ? 'pb-2 pt-4' : 'pb-4 pt-8 sm:pt-10'"
+        :class="workspace.hasStarted.value ? 'pb-2 pt-4' : 'pb-4 pt-8 sm:pt-10'"
       >
-        <div class="absolute left-0 top-3">
+        <div class="absolute left-0 top-3 min-[1400px]:hidden">
           <HistorySidebar />
         </div>
 
         <div
-          v-if="!workspace.hasStarted"
+          v-if="!workspace.hasStarted.value"
           class="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-[16px] bg-gradient-to-br from-brand to-brand-teal text-white shadow-glow"
         >
           <MessagesSquare :size="21" />
         </div>
         <h1
           class="text-center font-semibold leading-tight tracking-tight text-ink"
-          :class="workspace.hasStarted ? 'text-[19px]' : 'text-[28px]'"
+          :class="workspace.hasStarted.value ? 'text-[19px]' : 'text-[28px]'"
         >
           把对话交给我
         </h1>
-        <p v-if="!workspace.hasStarted" class="mt-1.5 text-center text-[13px] text-[#7a839a]">帮你整理成看得见的成长记录</p>
+        <p v-if="!workspace.hasStarted.value" class="mt-1.5 text-center text-[13px] text-[#7a839a]">帮你整理成看得见的成长记录</p>
       </div>
 
       <div ref="scrollArea" class="min-h-0 w-full flex-1 space-y-3 overflow-y-auto overscroll-contain py-3 pr-1">
@@ -157,45 +164,56 @@ function filesOfMessage(message: { fileUids?: string[] }): UploadFileState[] {
           </div>
         </template>
         <p v-else class="pt-10 text-center text-[13px] text-[#a3abbb]">
-          说说想聊什么、整理什么，方向可选，不设也能直接聊
+          直接聊、发个链接，或带文件让我整理；方向可选，不设也能聊
         </p>
       </div>
 
-      <div class="shrink-0 space-y-3 pb-4 pt-2">
+      <div class="shrink-0 space-y-2 pb-3 pt-1.5">
+        <div
+          v-if="workspace.state.confirmPrompt"
+          class="w-full animate-fade-up rounded-[14px] border border-[#b45309]/20 bg-[#fff9ee] px-3.5 py-2.5"
+        >
+          <p class="text-[12px] leading-relaxed text-[#7a4a12]">{{ workspace.state.confirmPrompt }}</p>
+          <div class="mt-2 flex gap-2">
+            <button type="button" class="btn small" @click="workspace.confirm(true)">好，按这个来</button>
+            <button type="button" class="btn ghost small" @click="workspace.confirm(false)">再想想</button>
+          </div>
+        </div>
+
         <div class="w-full animate-fade-up" style="animation-delay: .06s">
-          <ChatComposer />
+          <ChatComposer :compact="workspace.hasStarted.value" />
         </div>
 
-        <div v-if="workspace.state.bubbles.length" class="flex items-center gap-2 pl-1 text-[12px] text-[#9aa2b4] animate-fade-up">
-        <span class="inline-block h-1.5 w-1.5 rounded-full bg-gradient-to-r from-brand to-brand-teal"></span>
-        {{ friendlyStageMessage(workspace.state.stage) }}
-      </div>
-
-        <div v-if="workspace.state.confirmPrompt" class="w-full animate-fade-up rounded-[16px] border border-[#b45309]/20 bg-[#fff9ee] p-4">
-        <p class="text-[14px] leading-relaxed text-[#7a4a12]">{{ workspace.state.confirmPrompt }}</p>
-        <div class="mt-4 flex gap-2.5">
-          <button type="button" class="btn small" @click="workspace.confirm(true)">好，按这个来</button>
-          <button type="button" class="btn ghost small" @click="workspace.confirm(false)">再想想</button>
+        <div
+          v-if="workspace.state.bubbles.length && !workspace.state.confirmPrompt"
+          class="flex items-center gap-2 pl-1 text-[11px] text-[#9aa2b4] animate-fade-up"
+        >
+          <span class="inline-block h-1.5 w-1.5 rounded-full bg-gradient-to-r from-brand to-brand-teal"></span>
+          {{ friendlyStageMessage(workspace.state.stage) }}
         </div>
-      </div>
 
         <div
           v-if="workspace.state.notice"
-          class="flex w-full items-center gap-2.5 rounded-[14px] border px-4 py-3 text-[13px] animate-fade-up"
-        :class="workspace.state.noticeKind === 'error'
-          ? 'border-red-100 bg-red-50 text-[#b42318]'
-          : workspace.state.noticeKind === 'success'
-            ? 'border-teal-100 bg-teal-50 text-[#0f766e]'
-            : 'border-brand/10 bg-brand/5 text-brand'"
-      >
-        <component :is="noticeIcon" :size="16" class="shrink-0" />
-        <span>{{ workspace.state.notice }}</span>
-      </div>
+          class="flex w-full items-center gap-2 rounded-[12px] border px-3 py-2 text-[12px] animate-fade-up"
+          :class="workspace.state.noticeKind === 'error'
+            ? 'border-red-100 bg-red-50 text-[#b42318]'
+            : workspace.state.noticeKind === 'success'
+              ? 'border-teal-100 bg-teal-50 text-[#0f766e]'
+              : 'border-brand/10 bg-brand/5 text-brand'"
+        >
+          <component :is="noticeIcon" :size="15" class="shrink-0" />
+          <span>{{ workspace.state.notice }}</span>
+        </div>
 
-        <p class="pt-1 text-center text-[10px] text-[#b0b6c4]">
+        <p v-if="!workspace.hasStarted.value" class="text-center text-[10px] text-[#b0b6c4]">
           整理 · 复盘 · 画像 · 问答，由几位小伙伴一起完成
         </p>
       </div>
+      </div>
+
+      <aside class="hidden w-[264px] shrink-0 pt-4 min-[1400px]:block">
+        <RightInsightPanel />
+      </aside>
     </div>
   </div>
 </template>

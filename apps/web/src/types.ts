@@ -265,6 +265,7 @@ export interface ConversationMessage {
   createdAt: string
   kind?: 'text' | 'result' | 'file' | 'agent' | 'working' | 'direction'
   fileUids?: string[]
+  files?: UploadFileState[]
   bubbleId?: string
   agentState?: '进行中' | '完成' | '需要确认'
   result?: AgentResult
