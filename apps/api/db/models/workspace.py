@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, DateTime, Index, Integer, String, Text, func
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.db.base import Base
@@ -14,6 +14,8 @@ class WorkspaceTask(Base):
     __table_args__ = (
         Index("ix_workspace_task_user_created", "user_id", "created_at"),
         Index("ix_workspace_task_user_status", "user_id", "status"),
+        Index("ix_workspace_task_user_pinned", "user_id", "pinned"),
+        Index("ix_workspace_task_user_archived", "user_id", "archived"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -27,6 +29,8 @@ class WorkspaceTask(Base):
     confirm_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

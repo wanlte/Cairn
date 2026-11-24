@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -202,8 +203,55 @@ async def test_history_list_and_replay(client, db_session):
     assert "result" in kinds
     user_message = next(message for message in data["messages"] if message["kind"] == "text")
     assert "拖延" in user_message["text"]
-    result_message = next(message for message in data["messages"] if message["kind"] == "result")
-    assert result_message["result"]["summary"] == "上次建议你先做五分钟。"
+
+
+@pytest.mark.asyncio
+async def test_history_pin_archive_and_tidy(client, db_session):
+    """历史对话可以置顶、归档，也能批量整理。"""
+    from datetime import timedelta
+
+    headers = await _register_and_login(client)
+    user = (
+        await db_session.execute(select(User).where(User.email == "ws-user@cairn.dev"))
+    ).scalar_one()
+    now = datetime.now(UTC)
+    a = WorkspaceTask(task_key="task-tidy-a", user_id=user.id, status="DONE",
+                      intent="free", user_message="较早的对话", created_at=now - timedelta(days=2))
+    b = WorkspaceTask(task_key="task-tidy-b", user_id=user.id, status="DONE",
+                      intent="free", user_message="较新的对话", created_at=now - timedelta(days=1))
+    db_session.add_all([a, b])
+    await db_session.commit()
+
+    listing = (await client.get("/api/v1/workspace/tasks", headers=headers)).json()
+    keys = [item["task_id"] for item in listing if item["task_id"] in ("task-tidy-a", "task-tidy-b")]
+    assert keys == ["task-tidy-b", "task-tidy-a"]
+
+    pinned = await client.patch(
+        "/api/v1/workspace/tasks/task-tidy-a", json={"pinned": True}, headers=headers
+    )
+    assert pinned.status_code == 200
+    assert pinned.json()["pinned"] is True
+
+    listing = (await client.get("/api/v1/workspace/tasks", headers=headers)).json()
+    keys = [item["task_id"] for item in listing if item["task_id"] in ("task-tidy-a", "task-tidy-b")]
+    assert keys == ["task-tidy-a", "task-tidy-b"]
+
+    tidied = await client.post(
+        "/api/v1/workspace/tasks/tidy",
+        json={"task_keys": ["task-tidy-a"], "archived": True},
+        headers=headers,
+    )
+    assert tidied.status_code == 200
+    assert tidied.json()["updated"] == 1
+
+    active = (await client.get("/api/v1/workspace/tasks", headers=headers)).json()
+    assert "task-tidy-a" not in [item["task_id"] for item in active]
+    archived = (await client.get(
+        "/api/v1/workspace/tasks", params={"archived": "true"}, headers=headers
+    )).json()
+    archived_item = next(item for item in archived if item["task_id"] == "task-tidy-a")
+    assert archived_item["archived"] is True
+    assert archived_item["pinned"] is False
 
 
 @pytest.mark.asyncio

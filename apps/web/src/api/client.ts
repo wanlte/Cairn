@@ -105,6 +105,7 @@ export const api = {
   post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
     request<T>('POST', path, body, headers),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
+  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string, headers?: Record<string, string>) =>
     request<T>('DELETE', path, undefined, headers),
 
@@ -187,6 +188,8 @@ export interface WorkspaceTaskResponse {
   user_message?: string | null
   intent?: string
   direction?: string | null
+  pinned?: boolean
+  archived?: boolean
   created_at?: string | null
 }
 
@@ -226,7 +229,19 @@ export const workspaceApi = {
 
   task: (taskId: string) => api.get<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}`),
 
-  list: (limit = 50) => api.get<WorkspaceTaskResponse[]>(`/workspace/tasks?limit=${limit}`),
+  list: (limit = 50, archived?: boolean) =>
+    api.get<WorkspaceTaskResponse[]>(
+      `/workspace/tasks?limit=${limit}${archived === undefined ? '' : `&archived=${archived}`}`,
+    ),
+
+  patch: (taskId: string, patch: { pinned?: boolean; archived?: boolean }) =>
+    api.patch<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}`, patch),
+
+  tidy: (taskKeys: string[], archived: boolean) =>
+    api.post<{ updated: number }>('/workspace/tasks/tidy', {
+      task_keys: taskKeys,
+      archived,
+    }),
 
   history: (taskId: string) =>
     api.get<WorkspaceHistory>(`/workspace/tasks/${taskId}/history`),

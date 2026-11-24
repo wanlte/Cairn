@@ -67,6 +67,8 @@ class WorkspaceTaskResponse(BaseModel):
     user_message: str | None = None
     intent: str = "free"
     direction: str | None = None
+    pinned: bool = False
+    archived: bool = False
     created_at: datetime | None = None
 
     @classmethod
@@ -82,8 +84,24 @@ class WorkspaceTaskResponse(BaseModel):
             user_message=getattr(task, "user_message", None),
             intent=getattr(task, "intent", None) or "free",
             direction=getattr(task, "direction", None),
+            pinned=bool(getattr(task, "pinned", False)),
+            archived=bool(getattr(task, "archived", False)),
             created_at=getattr(task, "created_at", None),
         )
+
+
+class WorkspaceTaskPatch(BaseModel):
+    """整理单条历史对话：置顶或归档。"""
+
+    pinned: bool | None = None
+    archived: bool | None = None
+
+
+class WorkspaceTidyRequest(BaseModel):
+    """批量整理：选定若干对话统一归档或取消归档。"""
+
+    task_keys: list[str] = Field(default_factory=list, max_length=100)
+    archived: bool = True
 
 
 class WorkspaceMessageRecord(BaseModel):

@@ -12,7 +12,9 @@ from apps.api.workspace.schemas import (
     WorkspaceConfirmBody,
     WorkspaceHistoryResponse,
     WorkspaceTaskCreate,
+    WorkspaceTaskPatch,
     WorkspaceTaskResponse,
+    WorkspaceTidyRequest,
 )
 from apps.api.workspace.service import (
     build_history,
@@ -20,6 +22,8 @@ from apps.api.workspace.service import (
     create_task,
     get_task,
     list_tasks,
+    patch_task,
+    tidy_tasks,
 )
 
 router = APIRouter(prefix="/api/v1/workspace", tags=["workspace"])
@@ -39,10 +43,34 @@ async def create_workspace_task(
 @router.get("/tasks", response_model=list[WorkspaceTaskResponse])
 async def list_workspace_tasks(
     limit: int = Query(default=50, ge=1, le=100),
+    archived: bool = Query(default=False),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[WorkspaceTaskResponse]:
-    return await list_tasks(session, current_user.id, limit)
+    return await list_tasks(session, current_user.id, limit, archived)
+
+
+@router.post("/tasks/tidy", response_model=dict)
+async def tidy_workspace_tasks(
+    payload: WorkspaceTidyRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    count = await tidy_tasks(session, current_user.id, payload)
+    await session.commit()
+    return {"updated": count}
+
+
+@router.patch("/tasks/{task_key}", response_model=WorkspaceTaskResponse)
+async def patch_workspace_task(
+    task_key: str,
+    payload: WorkspaceTaskPatch,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> WorkspaceTaskResponse:
+    result = await patch_task(session, current_user.id, task_key, payload)
+    await session.commit()
+    return result
 
 
 @router.get("/tasks/{task_key}/history", response_model=WorkspaceHistoryResponse)

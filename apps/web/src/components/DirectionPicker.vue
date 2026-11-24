@@ -17,6 +17,9 @@ const sortedPrompts = computed(() => {
   )
 })
 
+const selectedPrompts = workspace.selectedPrompts
+const currentDirection = computed(() => workspace.state.direction)
+
 function isSelected(id: string): boolean {
   return workspace.state.selectedPromptIds.includes(id)
 }
@@ -42,41 +45,33 @@ onMounted(() => document.addEventListener('click', onDocumentClick))
 onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
 function choose(key: DirectionKey): void {
-  workspace.setDirection(key)
+  // 再点一次已选方向就取消，回到自由提问（方向完全可选）
+  workspace.setDirection(workspace.state.direction === key ? 'free' : key)
 }
+
+const chipText = computed(() => {
+  const parts: string[] = []
+  if (currentDirection.value !== 'free') parts.push(DIRECTION_LABELS[currentDirection.value])
+  else parts.push('不设方向')
+  if (selectedPrompts.value.length) parts.push(`提示词 ${selectedPrompts.value.length}`)
+  return parts.join(' · ')
+})
 </script>
 
 <template>
   <div ref="root" class="relative">
-    <div class="flex flex-wrap items-center gap-1.5">
-      <span class="text-[11px] font-semibold text-[#9aa2b4]">方向</span>
-      <button
-        v-for="option in DIRECTION_OPTIONS"
-        :key="option.key"
-        type="button"
-        class="rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200"
-        :class="workspace.state.direction === option.key && !workspace.state.customDirection
-          ? 'bg-brand text-white shadow-sm'
-          : 'bg-[#f4f6fb] text-[#6b7488] hover:bg-brand/10 hover:text-brand'"
-        @click="choose(option.key)"
-      >
-        {{ option.label }}
-      </button>
-      <button
-        type="button"
-        class="flex items-center gap-1 rounded-full bg-brand/5 px-2.5 py-1 text-[11px] font-semibold text-brand transition-colors hover:bg-brand/10"
-        @click="open = !open"
-      >
-        <Sparkles :size="11" /> 提示词 {{ workspace.selectedPrompts.value.length || '' }}
-        <ChevronDown :size="11" :class="open ? 'rotate-180 transition-transform' : 'transition-transform'" />
-      </button>
-      <span
-        v-if="workspace.state.recommendReason"
-        class="ml-auto rounded-full bg-brand-teal/10 px-2 py-0.5 text-[10px] font-medium text-[#0f766e]"
-      >
-        已为你推荐
-      </span>
-    </div>
+    <button
+      type="button"
+      class="flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition-all duration-200"
+      :class="open
+        ? 'border-brand/40 bg-brand/5 text-brand'
+        : 'border-[#e4e8f0] bg-white/80 text-[#5b6478] hover:border-brand/30 hover:text-brand'"
+      @click="open = !open"
+    >
+      <Sparkles :size="12" />
+      <span class="truncate">{{ chipText }}</span>
+      <ChevronDown :size="12" :class="open ? 'rotate-180 transition-transform' : 'transition-transform'" />
+    </button>
 
     <p v-if="workspace.state.recommendReason" class="mt-1.5 text-[10px] leading-relaxed text-[#a3abbb]">
       {{ workspace.state.recommendReason }}
@@ -84,10 +79,10 @@ function choose(key: DirectionKey): void {
 
     <div
       v-if="open"
-      class="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-[360px] overflow-y-auto rounded-[16px] border border-[#e4e8f0] bg-white p-3 shadow-xl animate-fade-up"
+      class="absolute bottom-full left-0 z-50 mb-2 max-h-[420px] w-[min(92vw,380px)] overflow-y-auto rounded-[16px] border border-[#e4e8f0] bg-white p-3 shadow-xl animate-fade-up"
     >
       <div class="mb-2 flex items-center justify-between">
-        <p class="text-[12px] font-semibold text-ink">常用提示词 · 点击选用</p>
+        <p class="text-[12px] font-semibold text-ink">方向与提示词 · 都是可选的</p>
         <button
           type="button"
           class="flex h-6 w-6 items-center justify-center rounded-lg text-[#9aa2b4] hover:bg-[#f4f6fb]"
@@ -98,6 +93,26 @@ function choose(key: DirectionKey): void {
         </button>
       </div>
 
+      <p class="mb-1.5 text-[11px] font-semibold text-[#9aa2b4]">方向</p>
+      <div class="flex flex-wrap gap-1.5">
+        <button
+          v-for="option in DIRECTION_OPTIONS"
+          :key="option.key"
+          type="button"
+          class="rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200"
+          :class="currentDirection === option.key && !workspace.state.customDirection
+            ? 'bg-brand text-white shadow-sm'
+            : 'bg-[#f4f6fb] text-[#6b7488] hover:bg-brand/10 hover:text-brand'"
+          @click="choose(option.key)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+      <p class="mt-1.5 text-[10px] text-[#a3abbb]">不选也没关系，我会自己判断该怎么做。</p>
+
+      <div class="my-3 border-t border-[#eef0f6]" />
+
+      <p class="mb-1.5 text-[11px] font-semibold text-[#9aa2b4]">常用提示词 · 点击选用</p>
       <div class="space-y-1.5">
         <div
           v-for="prompt in sortedPrompts"

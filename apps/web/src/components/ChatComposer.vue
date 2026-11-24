@@ -25,7 +25,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
   <div
-    class="composer group relative rounded-[24px] bg-white/90 border transition-all duration-200"
+    class="composer group relative z-50 rounded-[24px] bg-white/90 border transition-all duration-200"
     :class="focused ? 'border-brand/50 shadow-glow' : 'border-white/80 shadow-soft'"
   >
     <div class="border-b border-[#eef0f6] px-5 pb-3 pt-4">

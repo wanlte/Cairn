@@ -20,7 +20,9 @@ from apps.api.workspace.schemas import (
     WorkspaceMessageRecord,
     WorkspaceModelSelection,
     WorkspaceTaskCreate,
+    WorkspaceTaskPatch,
     WorkspaceTaskResponse,
+    WorkspaceTidyRequest,
     resolve_intent,
 )
 
@@ -178,18 +180,56 @@ async def get_task(session: AsyncSession, user_id: int, task_key: str) -> Worksp
 
 
 async def list_tasks(
-    session: AsyncSession, user_id: int, limit: int = 50
+    session: AsyncSession, user_id: int, limit: int = 50, archived: bool = False
 ) -> list[WorkspaceTaskResponse]:
-    """列出用户的历史对话，按最近更新倒序。"""
+    """列出历史对话：置顶优先，再按最近创建倒序。默认只看未归档的。"""
+    query = select(WorkspaceTask).where(WorkspaceTask.user_id == user_id)
+    if archived is not None:
+        query = query.where(WorkspaceTask.archived.is_(archived))
     tasks = (
         await session.execute(
-            select(WorkspaceTask)
-            .where(WorkspaceTask.user_id == user_id)
-            .order_by(WorkspaceTask.created_at.desc())
-            .limit(limit)
+            query.order_by(
+                WorkspaceTask.pinned.desc(),
+                WorkspaceTask.created_at.desc(),
+            ).limit(limit)
         )
     ).scalars().all()
     return [WorkspaceTaskResponse.from_task(task) for task in tasks]
+
+
+async def patch_task(
+    session: AsyncSession, user_id: int, task_key: str, payload: WorkspaceTaskPatch
+) -> WorkspaceTaskResponse:
+    """整理单条历史对话：置顶或归档。"""
+    task = await get_task(session, user_id, task_key)
+    if payload.pinned is not None:
+        task.pinned = payload.pinned
+    if payload.archived is not None:
+        task.archived = payload.archived
+    await session.flush()
+    return WorkspaceTaskResponse.from_task(task)
+
+
+async def tidy_tasks(
+    session: AsyncSession, user_id: int, payload: WorkspaceTidyRequest
+) -> int:
+    """批量整理：把选中的对话统一归档或取消归档，返回影响条数。"""
+    if not payload.task_keys:
+        return 0
+    tasks = (
+        await session.execute(
+            select(WorkspaceTask).where(
+                WorkspaceTask.user_id == user_id,
+                WorkspaceTask.task_key.in_(payload.task_keys),
+            )
+        )
+    ).scalars().all()
+    for task in tasks:
+        task.archived = payload.archived
+        if payload.archived:
+            task.pinned = False
+    await session.flush()
+    return len(tasks)
 
 
 async def build_history(

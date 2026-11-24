@@ -76,6 +76,7 @@ const state = reactive({
   noticeKind: 'info' as 'info' | 'error' | 'success',
   history: [] as WorkspaceTaskResponse[],
   historyLoading: false,
+  historyArchived: false,
 })
 
 const availablePrompts = computed(() => [...BUILTIN_PROMPTS, ...state.savedPrompts])
@@ -139,6 +140,7 @@ export const workspace = {
   state,
   selectedPrompts,
   availablePrompts,
+  notify,
 
   hasStarted: computed(() => state.messages.length > 0),
 
@@ -373,11 +375,49 @@ export const workspace = {
   async loadHistory(limit = 50): Promise<void> {
     state.historyLoading = true
     try {
-      state.history = await workspaceApi.list(limit)
+      state.history = await workspaceApi.list(limit, state.historyArchived)
     } catch (err) {
       notify(friendlyError(err), 'error')
     } finally {
       state.historyLoading = false
+    }
+  },
+
+  setHistoryArchived(value: boolean): void {
+    state.historyArchived = value
+    void workspace.loadHistory()
+  },
+
+  async togglePin(taskId: string): Promise<void> {
+    try {
+      const updated = await workspaceApi.patch(taskId, { pinned: !workspace.state.history.find((item) => item.task_id === taskId)?.pinned })
+      const index = state.history.findIndex((item) => item.task_id === taskId)
+      if (index >= 0) state.history.splice(index, 1, updated)
+      state.history.sort((a, b) => Number(b.pinned || false) - Number(a.pinned || false))
+      notify(updated.pinned ? '已置顶，方便下次接着聊' : '已取消置顶', 'success')
+    } catch (err) {
+      notify(friendlyError(err), 'error')
+    }
+  },
+
+  async archiveTask(taskId: string, archived = true): Promise<void> {
+    try {
+      const updated = await workspaceApi.patch(taskId, { archived })
+      state.history = state.history.filter((item) => item.task_id !== taskId)
+      if (archived) notify('已归档，去「归档」里还能找回来', 'success')
+    } catch (err) {
+      notify(friendlyError(err), 'error')
+    }
+  },
+
+  async tidyHistory(taskIds: string[], archived: boolean): Promise<void> {
+    if (!taskIds.length) return
+    try {
+      const result = await workspaceApi.tidy(taskIds, archived)
+      notify(archived ? `整理了 ${result.updated} 条到归档` : `恢复了 ${result.updated} 条对话`, 'success')
+      await workspace.loadHistory()
+    } catch (err) {
+      notify(friendlyError(err), 'error')
     }
   },
 
