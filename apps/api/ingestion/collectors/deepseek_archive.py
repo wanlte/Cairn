@@ -23,7 +23,10 @@ _ROLE_MAP = {
 }
 _ROLE_KEYS = ("role", "author", "sender", "from")
 _CONTENT_KEYS = ("content", "text", "message", "value")
-_TIME_KEYS = ("create_time", "created_at", "timestamp", "time")
+_TIME_KEYS = ("create_time", "created_at", "timestamp", "time", "inserted_at")
+# DeepSeek 官方导出把正文放在 fragments 里；THINK 等过程性片段不属于对话正文
+_FRAGMENT_CONTENT_TYPES = {"REQUEST", "RESPONSE", "TEXT", "CONTENT"}
+_FRAGMENT_SKIP_TYPES = {"THINK", "THINKING", "REASONING", "TOOL", "TOOL_CALL", "SEARCH"}
 
 
 def _parse_time(value: Any) -> datetime | None:
@@ -133,6 +136,8 @@ class DeepSeekArchiveCollector(BaseCollector):
             return None
         content = _content_of(next((message[key] for key in _CONTENT_KEYS if key in message), ""))
         if not content:
+            content = self._fragments_content(message.get("fragments"))
+        if not content:
             return None
         raw_time = next((message[key] for key in _TIME_KEYS if key in message), None)
         timestamp = _parse_time(raw_time)
@@ -145,3 +150,22 @@ class DeepSeekArchiveCollector(BaseCollector):
             confidence=0.9,
             metadata={"source": source},
         )
+
+    @staticmethod
+    def _fragments_content(fragments: Any) -> str:
+        """兼容 DeepSeek 官方导出：正文在 fragments[].content，按 type 过滤过程性片段。"""
+        if not isinstance(fragments, list):
+            return ""
+        parts: list[str] = []
+        for fragment in fragments:
+            if not isinstance(fragment, dict):
+                continue
+            frag_type = str(fragment.get("type") or "").strip().upper()
+            if frag_type in _FRAGMENT_SKIP_TYPES:
+                continue
+            if frag_type and frag_type not in _FRAGMENT_CONTENT_TYPES:
+                continue
+            text = fragment.get("content")
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+        return "\n".join(parts).strip()

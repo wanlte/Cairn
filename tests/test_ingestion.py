@@ -113,6 +113,58 @@ def test_deepseek_archive_collector_parses_zip_messages():
     assert preview.turns[0].time_precision == "HIGH"
 
 
+def test_deepseek_archive_collector_parses_official_fragments_format():
+    """真实 DeepSeek 导出：正文在 fragments 里，THINK 片段必须排除。"""
+    buffer = io.BytesIO()
+    session = {
+        "id": "e0adec46-281a-4c77-9753-1507bbe6f931",
+        "title": "sh文件是什么",
+        "current_message_id": 2,
+        "inserted_at": "2026-11-02T08:06:56.580Z",
+        "messages": [
+            {
+                "id": 1,
+                "parent_id": None,
+                "role": "USER",
+                "status": "FINISHED",
+                "inserted_at": "2026-11-02T08:07:08.396Z",
+                "fragments": [{"type": "REQUEST", "content": ".sh结尾的文件是什么"}],
+            },
+            {
+                "id": 2,
+                "parent_id": 1,
+                "role": "ASSISTANT",
+                "status": "FINISHED",
+                "inserted_at": "2026-11-02T08:07:08.392Z",
+                "fragments": [
+                    {"type": "THINK", "content": "内部思考过程，不应进入正文。"},
+                    {"type": "RESPONSE", "content": "以 .sh 结尾的文件通常是 Shell 脚本文件。"},
+                ],
+            },
+        ],
+    }
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(
+            "chat_sessions/e0adec46.json", json.dumps(session, ensure_ascii=False)
+        )
+
+    service = IngestionService()
+    preview = service.preview(
+        1,
+        IngestPreviewRequest(
+            source_type=SourceType.DEEPSEEK_ARCHIVE,
+            base64=base64.b64encode(buffer.getvalue()).decode("ascii"),
+            filename="deepseek_data.zip",
+        ),
+    )
+
+    assert preview.total_turns == 1
+    assert preview.turns[0].user_content == ".sh结尾的文件是什么"
+    assert preview.turns[0].assistant_content == "以 .sh 结尾的文件通常是 Shell 脚本文件。"
+    assert "内部思考" not in preview.turns[0].assistant_content
+    assert preview.turns[0].time_precision == "HIGH"
+
+
 async def test_api_preview_commit_correction_and_dedup(client):
     headers = await auth_headers(client, "ingestion@x.com")
     text = qoder_sample()

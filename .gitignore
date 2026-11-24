@@ -24,3 +24,12 @@ backend.log
 backend.err
 web.log
 web.err
+
+# 真实评测语料、标注与运行结果（含真实对话，不入库）
+eval/labels/human/
+eval/results/
+eval/real_corpus.zip
+eval/build_human_labels.py
+eval/extract_real_candidates.py
+eval/run_real_evaluation.py
+eval/resume_real_evaluation.py

@@ -8,6 +8,8 @@
 | 复盘一致率 | `eval/labels/review_30.jsonl` | ≥ 70% | 模型中判断与标签 verdict 一致比例 |
 | 检索 Recall@5 | `eval/labels/retrieval_30.jsonl` | ≥ 75% | Top 5 命中期望概念的查询比例 |
 
+真实对话标注集（samples 来源，AI 辅助标注，`synthetic=False`）：`eval/labels/human/extraction_50.jsonl`、`human/review_30.jsonl`、`human/retrieval_30.jsonl`。由 `eval/build_human_labels.py` 从 `samples/` 复现构建；首轮真实运行结果见 `docs/EVAL_REPORT.md`。
+
 门槛可通过 `.env` 调整：
 
 ```text
@@ -25,7 +27,7 @@ POST /api/v1/evaluation/review
 POST /api/v1/evaluation/retrieval
 ```
 
-请求体支持 `provider`、`credential_id`、`model`、`limit`、`dataset`。
+请求体支持 `provider`、`credential_id`、`model`、`limit`、`offset`、`dataset`。
 
 ## 重要说明
 

@@ -92,7 +92,11 @@ async def test_dataset_inventory(client):
     assert datasets["extraction_50.jsonl"]["rows"] == 50
     assert datasets["retrieval_30.jsonl"]["rows"] == 30
     assert datasets["review_30.jsonl"]["rows"] == 30
-    assert all(item["synthetic"] for item in datasets.values())
+    assert datasets["human/extraction_50.jsonl"]["rows"] == 50
+    assert datasets["human/retrieval_30.jsonl"]["rows"] == 30
+    assert datasets["human/review_30.jsonl"]["rows"] == 30
+    for name, item in datasets.items():
+        assert item["synthetic"] == (not name.startswith("human/"))
 
 
 async def test_extraction_evaluation_uses_labels(client, monkeypatch):
