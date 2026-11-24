@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -26,10 +27,12 @@ class ReviewReport(Base):
         UniqueConstraint("user_id", "idempotency_key", name="uq_review_idempotency"),
         UniqueConstraint("user_id", "period", name="uq_review_user_period"),
         Index("ix_review_report_user_created", "user_id", "created_at"),
+        Index("ix_review_report_user_deleted", "user_id", "is_deleted"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     period: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     overview_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)

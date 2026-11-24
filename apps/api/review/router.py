@@ -8,6 +8,7 @@ from apps.api.auth.deps import get_current_user
 from apps.api.db.base import get_session
 from apps.api.db.models.metrics import UserEvent
 from apps.api.db.models.user import User
+from apps.api.deletion.schemas import DeleteWithProfileResponse
 from apps.api.review.schemas import (
     ActionItemResponse,
     ActionItemStatus,
@@ -107,6 +108,20 @@ async def get_review(
     current_user: User = Depends(get_current_user),
 ) -> ReviewReportResponse:
     return await review_service.get_report(session, current_user.id, report_id)
+
+
+@router.delete("/{report_id}", response_model=DeleteWithProfileResponse)
+async def delete_review(
+    report_id: int,
+    keep_profile: bool = Query(default=True),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> DeleteWithProfileResponse:
+    removed = await review_service.delete_report(
+        session, current_user.id, report_id, keep_profile
+    )
+    await session.commit()
+    return DeleteWithProfileResponse(profile_claims_removed=removed)
 
 
 @router.post("/items/{item_id}/feedback", response_model=ReviewItemResponse)

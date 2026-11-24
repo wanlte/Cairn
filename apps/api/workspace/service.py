@@ -3,17 +3,29 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.agents.events import append_event
 from apps.api.agents.graph import build_workspace_graph
-from apps.api.agents.state import AgentEvent, AgentResult, ContextBundle, WorkspaceState
+from apps.api.agents.intent import (
+    IntentDecision,
+    classify_intent,
+    fallback_intent,
+)
+from apps.api.agents.state import (
+    AgentEvent,
+    AgentResult,
+    ContextBundle,
+    TaskIntent,
+    WorkspaceState,
+)
 from apps.api.agents.tools import AgentToolContext
 from apps.api.db.models.workspace import WorkspaceTask, WorkspaceTaskEvent
 from apps.api.errors import AppError
 from apps.api.gateway.factory import build_gateway_for_user
 from apps.api.gateway.langchain_adapter import GatewayChatModel
+from apps.api.gateway.metering import session_meter
 from apps.api.workspace.schemas import (
     WorkspaceConfirmBody,
     WorkspaceHistoryResponse,
@@ -29,34 +41,15 @@ from apps.api.workspace.schemas import (
 RECOMMEND_REASONS = {
     "weekly": "看起来你想回顾这一段的进展，本周复盘挺合适",
     "project": "像是围绕某个项目在梳理，项目复盘会更聚焦",
-    "conversation": "看到你带了对话文件，先从对话里帮你提炼重点",
+    "conversation": "先从对话里帮你提炼重点",
     "growth": "你想更了解自己的成长轨迹，成长画像能帮上忙",
     "free": "你可以直接说说想了解什么",
+    "profile_edit": "你要自己补充或修改画像里的结论",
 }
 
 
 def _task_key() -> str:
     return f"task-{secrets.token_hex(10)}"
-
-
-def _recommend(payload: WorkspaceTaskCreate) -> tuple[str, str]:
-    # 没有文件时一律走自由对话：没有证据支撑，复盘/画像节点只会空转，
-    # 用户真正的诉求是像聊天一样直接得到回答。
-    if not payload.files:
-        return "free", RECOMMEND_REASONS["free"]
-    source = f"{payload.message} {' '.join(file.name for file in payload.files)}".lower()
-    rules = [
-        ("weekly", ["本周", "这周", "一周", "周报", "weekly"]),
-        ("project", ["项目", "迭代", "上线", "发布", "project"]),
-        ("growth", ["画像", "成长", "职业", "profile"]),
-        ("conversation", ["对话", "聊天", "会话", "chat"]),
-    ]
-    for key, words in rules:
-        if any(word in source for word in words):
-            return key, RECOMMEND_REASONS[key]
-    if payload.direction and payload.direction != "free":
-        return payload.direction, "按你选的方向来"
-    return "conversation", RECOMMEND_REASONS["conversation"]
 
 
 async def _build_tool_ctx(
@@ -71,6 +64,7 @@ async def _build_tool_ctx(
         user_id=user_id,
         task="agent",
         model=model,
+        meter=session_meter(session),
     )
     return AgentToolContext(
         session=session,
@@ -84,11 +78,19 @@ def _initial_state(
     task: WorkspaceTask,
     payload: WorkspaceTaskCreate,
     intent_key: str,
+    decision: IntentDecision | None = None,
+    link_notices: list[str] | None = None,
+    link_content: str = "",
 ) -> WorkspaceState:
     context = ContextBundle(
         intent=resolve_intent(intent_key),
         user_message=payload.message,
         supplement=payload.custom_direction or "",
+        files=[file.model_dump() for file in payload.files],
+        use_history=decision.use_history if decision else True,
+        link_notices=list(link_notices or []),
+        link_content=link_content,
+        intent_reason=decision.reason if decision else "",
     )
     return WorkspaceState(
         task_key=task.task_key,
@@ -101,6 +103,18 @@ def _initial_state(
         events=[],
         stage="RUNNING",
     )
+
+
+async def _has_history_evidence(session: AsyncSession, user_id: int) -> bool:
+    from apps.api.db.models.extraction import Fragment
+
+    count = (
+        await session.execute(
+            select(func.count()).select_from(Fragment).where(Fragment.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    return bool(count)
+
 
 
 async def _persist_events(session: AsyncSession, task: WorkspaceTask, events: list[dict]) -> None:
@@ -118,14 +132,24 @@ async def _persist_events(session: AsyncSession, task: WorkspaceTask, events: li
 async def create_task(
     session: AsyncSession, user_id: int, payload: WorkspaceTaskCreate
 ) -> WorkspaceTask:
-    intent_key, reason = _recommend(payload)
+    from apps.api.ingestion.web import extract_link_context
+
+    link_context = await extract_link_context(payload)
+    has_history = await _has_history_evidence(session, user_id)
+    fallback = fallback_intent(
+        payload.message,
+        [file.name for file in payload.files],
+        payload.direction,
+        payload.custom_direction or "",
+        has_history,
+    )
     task = WorkspaceTask(
         task_key=_task_key(),
         user_id=user_id,
         status="RUNNING",
-        intent=intent_key,
+        intent=fallback.intent.value,
         direction=payload.direction,
-        recommend_reason=reason,
+        recommend_reason=fallback.reason,
         user_message=payload.message or None,
     )
     session.add(task)
@@ -133,8 +157,45 @@ async def create_task(
 
     try:
         tool_ctx = await _build_tool_ctx(session, user_id, payload.model)
+        decision = await classify_intent(
+            tool_ctx,
+            message=payload.message,
+            file_names=[file.name for file in payload.files],
+            direction=payload.direction,
+            supplement=payload.custom_direction or "",
+            has_history_evidence=has_history,
+        )
+        if (
+            decision.intent
+            in {
+                TaskIntent.WEEKLY,
+                TaskIntent.PROJECT,
+                TaskIntent.CONVERSATION,
+                TaskIntent.GROWTH,
+            }
+            and not payload.files
+            and not has_history
+        ):
+            decision = decision.model_copy(
+                update={
+                    "intent": TaskIntent.FREE,
+                    "reason": "还没有可复盘的记录，先陪你聊聊",
+                    "use_history": False,
+                    "needs_evidence": False,
+                }
+            )
+        intent_key = decision.intent.value
+        task.intent = intent_key
+        task.recommend_reason = decision.reason
         graph = build_workspace_graph(tool_ctx)
-        state = _initial_state(task, payload, intent_key)
+        state = _initial_state(
+            task,
+            payload,
+            intent_key,
+            decision,
+            link_context.notices,
+            link_context.combined,
+        )
         final = await graph.ainvoke(state)
 
         await _persist_events(session, task, final.get("events", []))
@@ -144,6 +205,7 @@ async def create_task(
             if isinstance(raw_context, ContextBundle)
             else ContextBundle.model_validate(raw_context)
         )
+        task.conversation_ids_json = list(context.conversation_ids or [])
         final_stage = final.get("stage", "WAITING_CONFIRM")
         task.status = final_stage
         if final_stage == "WAITING_CONFIRM":
@@ -183,7 +245,10 @@ async def list_tasks(
     session: AsyncSession, user_id: int, limit: int = 50, archived: bool = False
 ) -> list[WorkspaceTaskResponse]:
     """列出历史对话：置顶优先，再按最近创建倒序。默认只看未归档的。"""
-    query = select(WorkspaceTask).where(WorkspaceTask.user_id == user_id)
+    query = select(WorkspaceTask).where(
+        WorkspaceTask.user_id == user_id,
+        WorkspaceTask.is_deleted.is_(False),
+    )
     if archived is not None:
         query = query.where(WorkspaceTask.archived.is_(archived))
     tasks = (
@@ -208,6 +273,36 @@ async def patch_task(
         task.archived = payload.archived
     await session.flush()
     return WorkspaceTaskResponse.from_task(task)
+
+
+async def delete_task(
+    session: AsyncSession, user_id: int, task_key: str, keep_profile: bool = True
+) -> int:
+    """软删除一次对话；不保留画像时废弃只由这次对话证据支撑的结论。"""
+    from apps.api.deletion.service import (
+        drop_profile_for_fragments,
+        fragment_ids_for_conversations,
+    )
+
+    task = await get_task(session, user_id, task_key)
+    if task.is_deleted:
+        raise AppError("TASK_NOT_FOUND", "没有找到这次处理记录", 404)
+
+    fragment_ids: set[int] = set()
+    if not keep_profile:
+        conversation_ids = [
+            int(value) for value in (task.conversation_ids_json or [])
+        ]
+        fragment_ids = await fragment_ids_for_conversations(
+            session, user_id, conversation_ids
+        )
+
+    task.is_deleted = True
+    task.pinned = False
+    await session.flush()
+    if keep_profile:
+        return 0
+    return await drop_profile_for_fragments(session, user_id, fragment_ids)
 
 
 async def tidy_tasks(

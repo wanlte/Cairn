@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from apps.api.agents.capabilities import REGISTRY, CapabilityPlan, capabilities_prompt
 from apps.api.agents.state import (
     INTENT_LABELS,
     AgentEvent,
@@ -101,6 +102,120 @@ async def profiler_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> di
         context.profile_summary = result.data.get("summary", "")
     _write_context(updates, context)
     updates.update(_emit(state, AgentRole.PROFILER, result.message, done=result.ok, base=updates["events"]))
+    return updates
+
+
+async def profile_editor_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dict:
+    """画像编辑：按用户自述直接改画像条目，不跑复盘链路。"""
+    context = _context(state)
+    from apps.api.agents.profile_edit import apply_profile_edits
+
+    updates = _emit(state, AgentRole.PROFILER, "正在按你说的更新画像…")
+    summary = await apply_profile_edits(
+        tool_ctx,
+        message=state.get("user_message", ""),
+        supplement=state.get("supplement", ""),
+        period=_period(state),
+    )
+    context.profile_edit_summary = summary
+    context.profile_summary = summary
+    _write_context(updates, context)
+    updates.update(
+        _emit(state, AgentRole.PROFILER, summary, done=True, base=updates["events"])
+    )
+    return updates
+
+
+async def task_node(state: WorkspaceState, tool_ctx: AgentToolContext) -> dict:
+    """通用任务：让模型从能力注册表里选一个工具，执行后由教练组织成回答。"""
+    from pathlib import Path
+
+    from apps.api.gateway.schemas import GatewayOptions, GatewayRequest, ResponseFormat
+
+    context = _context(state)
+    prompt_path = Path(__file__).resolve().parents[3] / "prompts" / "task" / "v1.txt"
+    prompt = (
+        prompt_path.read_text(encoding="utf-8")
+        .replace("{capabilities}", capabilities_prompt())
+        .replace("{capability_names}", json.dumps(list(REGISTRY), ensure_ascii=False))
+    )
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["capability", "reason"],
+        "properties": {
+            "capability": {"type": "string", "enum": list(REGISTRY)},
+            "args": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["name", "value"],
+                    "properties": {
+                        "name": {"type": "string", "maxLength": 40},
+                        "value": {"type": "string", "maxLength": 2000},
+                    },
+                },
+            },
+            "reason": {"type": "string", "maxLength": 120},
+        },
+    }
+    events = _emit(state, AgentRole.ORGANIZER, "看看这件事能用哪些能力完成")["events"]
+
+    plan = None
+    try:
+        response = await tool_ctx.model.gateway.complete(
+            GatewayRequest(
+                task="task_plan",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "用户请求": context.user_message,
+                                "补充": context.supplement,
+                                "有附件": bool(context.files),
+                                "有链接正文": bool(context.link_content),
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
+                ],
+                options=GatewayOptions(
+                    response_format=ResponseFormat.JSON_SCHEMA,
+                    output_schema=schema,
+                    max_tokens=300,
+                    timeout_seconds=12,
+                ),
+                user_id=tool_ctx.user_id,
+            ),
+            meter=tool_ctx.model.meter,
+        )
+        raw = response.data
+        if raw is None and response.content:
+            raw = json.loads(response.content)
+        if raw:
+            plan = CapabilityPlan.model_validate(raw)
+    except Exception:  # noqa: BLE001 - 规划失败时降级为友好提示
+        plan = None
+
+    if plan is None or plan.capability not in REGISTRY:
+        summary = "这个任务我暂时没有合适的工具完成，可以换个说法，或者直接告诉我你想做什么。"
+        context.answer = summary
+        return {"events": events, "context": context.model_dump(mode="json")}
+
+    capability = REGISTRY[plan.capability]
+    events = _emit(state, AgentRole.COACH, f"用「{capability.name}」来做这件事", base=events)["events"]
+    try:
+        result = await capability.handler(tool_ctx, context, plan.args)
+        summary = result.data.get("summary") or result.message
+    except Exception:  # noqa: BLE001 - 单个能力失败不影响整轮对话
+        summary = "这件事没做成，换个说法或换个工具再试试。"
+
+    context.answer = summary
+    updates = _emit(state, AgentRole.COACH, "任务处理好了", done=True, base=events)
+    _write_context(updates, context)
     return updates
 
 
@@ -211,6 +326,15 @@ def _intent(state: WorkspaceState) -> TaskIntent:
 def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: TaskIntent) -> AgentResult:
     label = INTENT_LABELS.get(intent, "自由提问")
     report_id = context.review_id
+    if intent == TaskIntent.PROFILE_EDIT:
+        return AgentResult(
+            kind="画像",
+            title="画像已更新",
+            summary=context.profile_edit_summary or "画像已经按你说的改好了。",
+            suggestions=["继续补充个人信息", "看看现在的画像"],
+            next_label="看看画像",
+            report_id=report_id,
+        )
     if intent == TaskIntent.GROWTH and context.profile_id:
         return AgentResult(
             kind="画像",
@@ -220,7 +344,7 @@ def _build_result(state: WorkspaceState, context: ContextBundle, *, intent: Task
             next_label="再聊几句",
             report_id=report_id,
         )
-    if intent == TaskIntent.FREE:
+    if intent in (TaskIntent.FREE, TaskIntent.TASK):
         return AgentResult(
             kind="问答",
             title=label,
@@ -245,10 +369,15 @@ def _chat_system_prompt(has_evidence: bool) -> str:
             "你是 Cairn 的成长教练。用户的问题有相关对话记录和成长画像作为背景。"
             "自然、像朋友一样回答：画像只作背景不要照抄；涉及用户个人经历的具体结论"
             "要有记录支撑，证据不足的部分坦诚说明。不要输出字段名或编号。"
+            "如果用户问「你是什么/你是谁」，就介绍自己是 Cairn 的成长教练，"
+            "能陪他聊天、读链接、整理对话、保留可追问的记忆，也能在对话里帮他改画像。"
+            "如果提供了「链接正文」，就基于正文回答用户的问题，不要说无法访问链接。"
         )
     return (
         "你是 Cairn 的陪伴式成长教练，正在和用户自然聊天。"
         "直接、真诚地回答用户的问题，可以给建议、提问、共情，像两个人在对话。"
+        "如果用户问「你是什么/你是谁」，就大方介绍自己：你是 Cairn 的成长教练，"
+        "能陪他聊天、读链接、整理对话、保留可追问的记忆，也能在对话里帮他改画像。"
         "如果用户提到画像背景，可以作为参考，但不要照抄，也不要追问用户上传文件。"
         "不要说「没有相关记录无法回答」，也不要输出字段名或编号。"
         "回答用自然中文，简洁但有温度。"
@@ -259,12 +388,20 @@ async def _coach_answer(tool_ctx: AgentToolContext, state: WorkspaceState) -> st
     from apps.api.gateway.schemas import GatewayOptions, GatewayRequest
 
     message = state.get("user_message", "") or "请帮我做个总结"
-    context = await coach_context(tool_ctx, message)
+    bundle = _context(state)
+    if bundle.use_history:
+        context = await coach_context(tool_ctx, message)
+    else:
+        context = {"画像": [], "相关记录": []}
     supplement = (state.get("supplement") or "").strip()
     has_evidence = bool(context.get("相关记录"))
     user_payload = {"问题": message, **context}
     if supplement:
         user_payload["补充要求"] = supplement
+    if bundle.link_notices:
+        user_payload["链接读取情况"] = bundle.link_notices
+    if bundle.link_content:
+        user_payload["链接正文"] = bundle.link_content
     request = GatewayRequest(
         task="agent_chat",
         messages=[

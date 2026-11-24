@@ -26,6 +26,8 @@ class WorkspaceTask(Base):
     direction: Mapped[str | None] = mapped_column(String(64), nullable=True)
     recommend_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     user_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    conversation_ids_json: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     confirm_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)

@@ -8,6 +8,7 @@ from apps.api.agents.events import stream_events
 from apps.api.auth.deps import get_current_user
 from apps.api.db.base import get_session
 from apps.api.db.models.user import User
+from apps.api.deletion.schemas import DeleteWithProfileResponse
 from apps.api.workspace.schemas import (
     WorkspaceConfirmBody,
     WorkspaceHistoryResponse,
@@ -20,6 +21,7 @@ from apps.api.workspace.service import (
     build_history,
     confirm_task,
     create_task,
+    delete_task,
     get_task,
     list_tasks,
     patch_task,
@@ -71,6 +73,20 @@ async def patch_workspace_task(
     result = await patch_task(session, current_user.id, task_key, payload)
     await session.commit()
     return result
+
+
+@router.delete("/tasks/{task_key}", response_model=DeleteWithProfileResponse)
+async def delete_workspace_task(
+    task_key: str,
+    keep_profile: bool = Query(default=True),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> DeleteWithProfileResponse:
+    removed = await delete_task(
+        session, current_user.id, task_key, keep_profile
+    )
+    await session.commit()
+    return DeleteWithProfileResponse(profile_claims_removed=removed)
 
 
 @router.get("/tasks/{task_key}/history", response_model=WorkspaceHistoryResponse)

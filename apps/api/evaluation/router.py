@@ -29,7 +29,9 @@ async def evaluate_extraction(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> ExtractionEvalResponse:
-    return await evaluation_service.evaluate_extraction(session, current_user.id, payload)
+    result = await evaluation_service.evaluate_extraction(session, current_user.id, payload)
+    await session.commit()
+    return result
 
 
 @router.post("/review", response_model=ReviewEvalResponse)
@@ -38,7 +40,9 @@ async def evaluate_review(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> ReviewEvalResponse:
-    return await evaluation_service.evaluate_review(session, current_user.id, payload)
+    result = await evaluation_service.evaluate_review(session, current_user.id, payload)
+    await session.commit()
+    return result
 
 
 @router.post("/retrieval", response_model=RetrievalEvalResponse)
@@ -47,4 +51,6 @@ async def evaluate_retrieval(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> RetrievalEvalResponse:
-    return await evaluation_service.evaluate_retrieval(session, current_user.id, payload)
+    result = await evaluation_service.evaluate_retrieval(session, current_user.id, payload)
+    await session.commit()
+    return result

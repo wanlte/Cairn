@@ -12,6 +12,7 @@ class WorkspaceFilePayload(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     size: int = Field(default=0, ge=0)
     content: str = Field(default="", max_length=8 * 1024 * 1024)
+    source_url: str | None = Field(default=None, max_length=2048)
 
 
 class WorkspaceModelSelection(BaseModel):
@@ -129,5 +130,6 @@ def resolve_intent(direction: str) -> TaskIntent:
         "conversation": TaskIntent.CONVERSATION,
         "growth": TaskIntent.GROWTH,
         "free": TaskIntent.FREE,
+        "profile_edit": TaskIntent.PROFILE_EDIT,
     }
     return mapping.get(direction, TaskIntent.FREE)

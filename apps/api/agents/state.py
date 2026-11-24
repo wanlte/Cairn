@@ -12,6 +12,8 @@ class TaskIntent(str, Enum):
     CONVERSATION = "conversation"
     GROWTH = "growth"
     FREE = "free"
+    PROFILE_EDIT = "profile_edit"
+    TASK = "task"
 
 
 INTENT_LABELS: dict[TaskIntent, str] = {
@@ -20,6 +22,8 @@ INTENT_LABELS: dict[TaskIntent, str] = {
     TaskIntent.CONVERSATION: "对话复盘",
     TaskIntent.GROWTH: "成长画像",
     TaskIntent.FREE: "自由提问",
+    TaskIntent.PROFILE_EDIT: "画像更新",
+    TaskIntent.TASK: "通用任务",
 }
 
 
@@ -63,6 +67,7 @@ class ContextBundle(BaseModel):
     user_message: str = ""
     supplement: str = ""
     conversation_ids: list[int] = Field(default_factory=list)
+    files: list[dict[str, Any]] = Field(default_factory=list)
     turn_count: int = 0
     fragment_count: int = 0
     review_id: int | None = None
@@ -72,6 +77,11 @@ class ContextBundle(BaseModel):
     profile_summary: str = ""
     answer: str = ""
     revisions: int = 0
+    use_history: bool = True
+    link_notices: list[str] = Field(default_factory=list)
+    link_content: str = ""
+    intent_reason: str = ""
+    profile_edit_summary: str = ""
     final_result: AgentResult | None = None
     error: str | None = None
 

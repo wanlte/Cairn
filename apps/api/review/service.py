@@ -16,6 +16,7 @@ from apps.api.db.models.extraction import Fragment
 from apps.api.db.models.review import ActionItem, ReviewItem, ReviewReport
 from apps.api.errors import AppError
 from apps.api.gateway.factory import build_gateway_for_user
+from apps.api.gateway.metering import session_meter
 from apps.api.gateway.schemas import (
     GatewayOptions,
     GatewayRequest,
@@ -204,7 +205,7 @@ class ReviewService:
         )
 
         try:
-            response = await gateway.complete(gateway_request)
+            response = await gateway.complete(gateway_request, meter=session_meter(session))
             if not response.data:
                 raise AppError("INVALID_REVIEW_OUTPUT", "复盘输出为空", 502)
             output = ReviewOutput.model_validate(response.data)
@@ -396,9 +397,38 @@ class ReviewService:
         self, session: AsyncSession, user_id: int, report_id: int
     ) -> ReviewReportResponse:
         report = await session.get(ReviewReport, report_id)
-        if not report or report.user_id != user_id:
+        if not report or report.user_id != user_id or report.is_deleted:
             raise AppError("REVIEW_NOT_FOUND", "复盘报告不存在", 404)
         return await self._to_response(session, report)
+
+    async def delete_report(
+        self, session: AsyncSession, user_id: int, report_id: int, keep_profile: bool = True
+    ) -> int:
+        """软删除复盘；不保留画像时废弃只由这次复盘证据支撑的结论。"""
+        from apps.api.deletion.service import drop_profile_for_fragments
+
+        report = await session.get(ReviewReport, report_id)
+        if not report or report.user_id != user_id or report.is_deleted:
+            raise AppError("REVIEW_NOT_FOUND", "复盘报告不存在", 404)
+
+        fragment_ids: set[int] = set()
+        if not keep_profile:
+            items = (
+                await session.execute(
+                    select(ReviewItem).where(ReviewItem.report_id == report_id)
+                )
+            ).scalars().all()
+            for item in items:
+                if item.fragment_id is not None:
+                    fragment_ids.add(int(item.fragment_id))
+                for value in item.evidence_fragment_ids or []:
+                    fragment_ids.add(int(value))
+
+        report.is_deleted = True
+        await session.flush()
+        if keep_profile:
+            return 0
+        return await drop_profile_for_fragments(session, user_id, fragment_ids)
 
     async def list_reports(
         self, session: AsyncSession, user_id: int, limit: int = 50
@@ -406,7 +436,10 @@ class ReviewService:
         reports = (
             await session.execute(
                 select(ReviewReport)
-                .where(ReviewReport.user_id == user_id)
+                .where(
+                    ReviewReport.user_id == user_id,
+                    ReviewReport.is_deleted.is_(False),
+                )
                 .order_by(ReviewReport.id.desc())
                 .limit(limit)
             )
