@@ -19,6 +19,8 @@ M17 按意图对话：系统不再因为上传过文件或链接就把每句话�
 真实评测首轮已跑（2026-11-24，DeepSeek 真实 Provider）：从 samples 真实对话自建 human 标注集并全链路运行，检索 Recall@5 100%（BM25）、抽取字段准确率 43.1%、复盘一致率 60%（覆盖 5/30）；失败主因是自由文本精确匹配口径与复盘判断覆盖不足，详见 `docs/EVAL_REPORT.md`。下一步：自由文本字段改语义匹配、约束枚举词表、提升复盘 judgment 覆盖、接入真实 embedding Provider，补人工双标后重跑。
 
 ## 快速开始
+> 上线部署（阿里云）：见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)，配套 `docker-compose.prod.yml` 与 `scripts/deploy.sh`。
+
 前置：Python 3.11+、uv、Docker Desktop、Node.js 20+、Git。
 
 首次准备：

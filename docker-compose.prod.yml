@@ -1,0 +1,75 @@
+# Cairn 生产编排（与本地开发的 docker-compose.yml 分离）
+# 用法：docker compose -f docker-compose.prod.yml --env-file .env.production <command>
+# 完整流程见 docs/DEPLOYMENT.md
+# 固定项目名：与本地开发的 docker-compose.yml（项目名 cairn）隔离，避免在同一台机器上互相接管容器和数据卷
+name: cairn-prod
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cairn
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env.production 中设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: cairn
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cairn -d cairn"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # 注意：不映射宿主端口，只能被容器网络内部访问
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # AOF 持久化；Redis 在本项目中仅作缓存，数据可重建
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # 注意：不映射宿主端口
+
+  api:
+    build: .
+    image: cairn-api:latest
+    restart: unless-stopped
+    # 所有配置经环境变量注入；环境变量优先级高于 pydantic-settings 读取的 .env 文件，无需再挂载文件
+    env_file: .env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 用 Python 标准库探活（镜像内没有 curl）；http.client 不读取代理环境变量，不会把本机请求发往代理
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; c = http.client.HTTPConnection('127.0.0.1', 8000, timeout=3); c.request('GET', '/api/v1/health'); raise SystemExit(0 if c.getresponse().status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  web:
+    build: ./apps/web
+    image: cairn-web:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # HTTPS 证书目录：阿里云证书放 certs/server.crt + certs/server.key
+      - ./certs:/etc/nginx/certs:ro
+      # certbot HTTP-01 验证目录（方案 B 使用）
+      - ./certbot-www:/var/www/certbot:ro
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:

@@ -1,0 +1,26 @@
+# API 镜像构建上下文排除项
+.git
+.venv
+.env*
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+node_modules
+**/node_modules
+apps/web/dist
+samples
+tests
+docs
+scripts
+# eval 只保留合成标签集（评测接口依赖），真实语料与结果不进镜像
+eval/*
+!eval/labels
+# 真实对话人工标注集，绝不进镜像
+eval/labels/human
+.codebuddy
+.playwright-cli
+*.log
+backend.err
+web.err

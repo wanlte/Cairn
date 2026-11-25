@@ -1,5 +1,11 @@
 .env
+.env.production
 .venv/
+
+# 生产部署敏感文件（HTTPS 私钥、certbot 工作目录、数据库备份）
+certs/
+certbot-www/
+backups/
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -12,7 +18,8 @@ node_modules/
 apps/web/dist/
 
 # 本地样例与演示数据（含真实对话/分享链接，不入库）
-samples/
+# 只忽略仓库根目录的 samples/；apps/api/samples 是后端源码包，不能被忽略
+/samples/
 scripts/gateway_demo.py
 
 # 工具生成目录
