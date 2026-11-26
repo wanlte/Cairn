@@ -7,6 +7,7 @@ from apps.api.config import get_settings
 from apps.api.credentials import service as credential_service
 from apps.api.errors import AppError
 from apps.api.gateway.providers import build_provider
+from apps.api.gateway.ratelimit import get_shared_limiter
 from apps.api.gateway.schemas import ProviderName
 from apps.api.gateway.service import ModelGateway
 
@@ -85,7 +86,12 @@ async def build_gateway_for_user(
             model=model,
         )
         resolved = provider or ProviderName.OPENAI_COMPAT
-        return ModelGateway([gateway_provider]), None, model, resolved
+        return (
+            ModelGateway([gateway_provider], limiter=get_shared_limiter()),
+            None,
+            model,
+            resolved,
+        )
 
     if credential_id is not None:
         credentials = await credential_service.list_credentials(session, user_id)
@@ -105,7 +111,7 @@ async def build_gateway_for_user(
             for item in ordered
         ]
         return (
-            ModelGateway(providers),
+            ModelGateway(providers, limiter=get_shared_limiter()),
             primary.id,
             model or primary.model,
             ProviderName(primary.provider),
@@ -119,7 +125,12 @@ async def build_gateway_for_user(
             base_url=base_url,
             model=model or env_model,
         )
-        return ModelGateway([gateway_provider]), None, model or env_model, provider
+        return (
+            ModelGateway([gateway_provider], limiter=get_shared_limiter()),
+            None,
+            model or env_model,
+            provider,
+        )
 
     raise AppError(
         "CREDENTIAL_REQUIRED",

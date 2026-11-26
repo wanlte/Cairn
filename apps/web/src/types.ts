@@ -268,10 +268,57 @@ export interface ConversationMessage {
   files?: UploadFileState[]
   bubbleId?: string
   agentState?: '进行中' | '完成' | '需要确认'
+  streaming?: boolean
   result?: AgentResult
   directionKey?: DirectionKey
   directionLabel?: string
 }
+
+export interface ChatFilePayload {
+  name: string
+  size: number
+  content: string
+}
+
+export interface ChatRequestPayload {
+  message: string
+  model: ModelSelection
+  session_id?: string | null
+  files?: ChatFilePayload[]
+}
+
+export interface ChatRedirectFrame {
+  redirect: true
+  intent: string
+  reason: string
+}
+
+export interface ChatMetaFrame {
+  type: 'meta'
+  session_id: string
+}
+
+export interface ChatDeltaFrame {
+  type: 'delta'
+  delta: string
+}
+
+export interface ChatDoneFrame {
+  type: 'done'
+  message_id: number
+}
+
+export interface ChatErrorFrame {
+  type: 'error'
+  message: string
+  code?: string | null
+}
+
+export type ChatStreamFrame =
+  | ChatMetaFrame
+  | ChatDeltaFrame
+  | ChatDoneFrame
+  | ChatErrorFrame
 
 export interface AgentBubble {
   id: string

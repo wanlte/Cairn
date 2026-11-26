@@ -6,6 +6,10 @@
 certs/
 certbot-www/
 backups/
+*.pem
+*.key
+*.p12
+*.pfx
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -24,6 +28,7 @@ scripts/gateway_demo.py
 
 # 工具生成目录
 .codebuddy/
+.zcode/
 .playwright-cli/
 
 # 本地运行日志

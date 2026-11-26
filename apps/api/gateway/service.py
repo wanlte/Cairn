@@ -4,7 +4,7 @@ import asyncio
 import json
 import random
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from apps.api.config import get_settings
@@ -13,7 +13,7 @@ from apps.api.gateway.capabilities import (
     probe_capabilities,
 )
 from apps.api.gateway.providers import BaseProvider
-from apps.api.gateway.ratelimit import GatewayLimiter
+from apps.api.gateway.ratelimit import GatewayLimiter, get_shared_limiter
 from apps.api.gateway.schemas import (
     GatewayErrorCode,
     GatewayRequest,
@@ -21,6 +21,7 @@ from apps.api.gateway.schemas import (
     MeteringRecord,
     ProviderCapabilities,
     ProviderName,
+    StreamChunk,
     TokenUsage,
     UnifiedError,
 )
@@ -90,7 +91,8 @@ class ModelGateway:
     ) -> None:
         self.providers = list(providers)
         self.registry = registry or CapabilityRegistry()
-        self.limiter = limiter or GatewayLimiter()
+        # 限流/熔断状态必须跨请求累积，默认取进程级单例
+        self.limiter = limiter or get_shared_limiter()
         self._idempotency: dict[str, GatewayResponse] = {}
         self._settings = get_settings()
 
@@ -166,11 +168,9 @@ class ModelGateway:
             }:
                 break
             fallback_from = (
-                
-                    f"{fallback_from} -> {provider.name.value}"
-                    if fallback_from
-                    else provider.name.value
-                
+                f"{fallback_from} -> {provider.name.value}"
+                if fallback_from
+                else provider.name.value
             )
 
         latency_ms = int((time.perf_counter() - started) * 1000)
@@ -188,6 +188,71 @@ class ModelGateway:
             fallback_from=fallback_from,
         )
         raise error
+
+    async def complete_stream(
+        self,
+        request: GatewayRequest,
+        *,
+        meter: Meter | None = None,
+    ) -> AsyncIterator[StreamChunk]:
+        """自由文本流式调用：只走首个 provider，首字前可重试，流末统一计量。"""
+        if not self.providers:
+            raise UnifiedError(
+                GatewayErrorCode.SERVER_ERROR, "没有可用的模型凭证", retryable=True
+            )
+        provider = self.providers[0]
+        self.limiter.configure(provider.name, provider.capabilities())
+        started = time.perf_counter()
+        retries = 0
+        usage = TokenUsage()
+        emitted = False
+        max_attempts = max(1, self._settings.gateway_retry_max)
+
+        while True:
+            stream = self.limiter.run_stream(
+                provider.name, lambda: provider.complete_stream(request)
+            )
+            try:
+                async for chunk in stream:
+                    if chunk.delta:
+                        emitted = True
+                    if chunk.usage is not None:
+                        usage = chunk.usage
+                    yield chunk
+            except Exception as exc:
+                error = provider.normalize_error(exc)
+                if (
+                    not emitted
+                    and error.code in {GatewayErrorCode.RATE_LIMIT, GatewayErrorCode.SERVER_ERROR}
+                    and retries < max_attempts - 1
+                ):
+                    retries += 1
+                    backoff = 0.01 * (2 ** (retries - 1))
+                    await asyncio.sleep(backoff + random.uniform(0, backoff))
+                    continue
+                await self._record(
+                    meter,
+                    request,
+                    None,
+                    status="failed",
+                    retries=retries,
+                    error=error,
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                )
+                raise error from exc
+            finally:
+                await stream.aclose()
+            break
+
+        response = GatewayResponse(
+            content="",
+            provider=provider.name,
+            model=request.model or getattr(provider, "model", "unknown"),
+            usage=usage,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            retry_count=retries,
+        )
+        await self._record(meter, request, response, status="ok", retries=retries)
 
     async def _call_with_retry(
         self,

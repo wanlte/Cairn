@@ -1,4 +1,5 @@
 from apps.api.db.models.analysis import AnalysisAppeal, DesirabilityFlag
+from apps.api.db.models.chat import ChatMessage
 from apps.api.db.models.credential import ModelCredential
 from apps.api.db.models.extension import DailyQuestion, Simulation
 from apps.api.db.models.extraction import ExtractionRun, Fragment
@@ -19,6 +20,7 @@ __all__ = [
     "AnalysisAppeal",
     "ApiKey",
     "AuditLog",
+    "ChatMessage",
     "ConsentRecord",
     "CounterfactualEntry",
     "DailyQuestion",

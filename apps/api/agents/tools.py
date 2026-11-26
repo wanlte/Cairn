@@ -32,7 +32,7 @@ class AgentToolContext(BaseModel):
     session: Any
     user_id: int
     credential: dict
-    model: GatewayChatModel
+    model: GatewayChatModel | None = None
 
 
 class ToolResult(BaseModel):

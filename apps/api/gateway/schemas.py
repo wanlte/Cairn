@@ -151,6 +151,17 @@ class GatewayResponse(BaseModel):
     raw_response_snippet: str | None = None
 
 
+class StreamChunk(BaseModel):
+    """流式调用的最小产出单元。
+
+    delta 为本次增量文本（模型 reasoning/thinking 增量不计入）；
+    usage 只在流结束时由最后一个 chunk 携带一次。
+    """
+
+    delta: str | None = None
+    usage: TokenUsage | None = None
+
+
 class MeteringRecord(BaseModel):
     user_id: int
     task: str

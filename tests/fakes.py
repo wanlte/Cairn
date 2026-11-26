@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 from apps.api.gateway.providers import BaseProvider
 from apps.api.gateway.schemas import (
     GatewayErrorCode,
@@ -7,6 +9,7 @@ from apps.api.gateway.schemas import (
     GatewayResponse,
     ProviderCapabilities,
     ProviderName,
+    StreamChunk,
     TokenUsage,
     UnifiedError,
 )
@@ -60,3 +63,25 @@ class FakeProvider(BaseProvider):
         if isinstance(outcome, GatewayResponse):
             return outcome
         return fake_response(str(outcome), provider=self.name)
+
+    async def complete_stream(self, request: GatewayRequest) -> AsyncIterator[StreamChunk]:
+        self.requests.append(request.model_copy(deep=True))
+        outcome = self.outcomes.pop(0) if self.outcomes else fake_response("{}")
+        if isinstance(outcome, Exception):
+            raise outcome
+        if isinstance(outcome, list):
+            for item in outcome:
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+            return
+        response = (
+            outcome
+            if isinstance(outcome, GatewayResponse)
+            else fake_response(str(outcome), provider=self.name)
+        )
+        content = response.content
+        step = max(1, len(content) // 3)
+        for offset in range(0, len(content), step):
+            yield StreamChunk(delta=content[offset : offset + step])
+        yield StreamChunk(usage=response.usage)

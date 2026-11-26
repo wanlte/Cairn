@@ -21,6 +21,7 @@ from apps.api.agents.state import (
     WorkspaceState,
 )
 from apps.api.agents.tools import AgentToolContext
+from apps.api.db.models.chat import ChatMessage
 from apps.api.db.models.workspace import WorkspaceTask, WorkspaceTaskEvent
 from apps.api.errors import AppError
 from apps.api.gateway.factory import build_gateway_for_user
@@ -48,7 +49,8 @@ RECOMMEND_REASONS = {
 }
 
 
-def _task_key() -> str:
+def new_task_key() -> str:
+    """生成一次对话/任务的历史壳标识，聊天会话也复用它。"""
     return f"task-{secrets.token_hex(10)}"
 
 
@@ -144,7 +146,7 @@ async def create_task(
         has_history,
     )
     task = WorkspaceTask(
-        task_key=_task_key(),
+        task_key=new_task_key(),
         user_id=user_id,
         status="RUNNING",
         intent=fallback.intent.value,
@@ -332,6 +334,33 @@ async def build_history(
 ) -> WorkspaceHistoryResponse:
     """用任务与历史事件重建一次完整对话，供前端加载后继续。"""
     task = await get_task(session, user_id, task_key)
+    chat_rows = (
+        await session.execute(
+            select(ChatMessage)
+            .where(
+                ChatMessage.user_id == user_id,
+                ChatMessage.session_id == task.task_key,
+            )
+            .order_by(ChatMessage.id)
+        )
+    ).scalars().all()
+    if chat_rows:
+        messages = [
+            WorkspaceMessageRecord(
+                id=f"chat-{row.id}",
+                role="用户" if row.role == "user" else "助手",
+                text=row.content,
+                kind="text",
+                created_at=row.created_at,
+            )
+            for row in chat_rows
+        ]
+        return WorkspaceHistoryResponse(
+            task=WorkspaceTaskResponse.from_task(task),
+            messages=messages,
+            session_id=task.task_key,
+        )
+
     rows = (
         await session.execute(
             select(WorkspaceTaskEvent)

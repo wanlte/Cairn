@@ -12,6 +12,7 @@ from apps.api.db.models.user import User
 from apps.api.errors import AppError
 from apps.api.gateway.metering import session_meter
 from apps.api.gateway.providers import build_provider
+from apps.api.gateway.ratelimit import get_shared_limiter
 from apps.api.gateway.schemas import (
     GatewayOptions,
     GatewayRequest,
@@ -131,7 +132,7 @@ async def complete(
             retryable=False,
         )
 
-    gateway = ModelGateway(providers)
+    gateway = ModelGateway(providers, limiter=get_shared_limiter())
 
     meter = session_meter(session)
 

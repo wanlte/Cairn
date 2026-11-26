@@ -121,6 +121,7 @@ class WorkspaceMessageRecord(BaseModel):
 class WorkspaceHistoryResponse(BaseModel):
     task: WorkspaceTaskResponse
     messages: list[WorkspaceMessageRecord] = Field(default_factory=list)
+    session_id: str | None = None
 
 
 def resolve_intent(direction: str) -> TaskIntent:

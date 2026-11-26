@@ -24,6 +24,16 @@ def _test_urls() -> tuple[str, str]:
     return async_url, sync_url
 
 
+@pytest.fixture(autouse=True)
+def _reset_shared_limiter():
+    """限流/熔断已改为进程级单例，测试间必须重置，避免状态跨用例泄漏。"""
+    from apps.api.gateway.ratelimit import get_shared_limiter
+
+    get_shared_limiter().reset()
+    yield
+    get_shared_limiter().reset()
+
+
 @pytest.fixture(scope="session")
 def test_engine():
     async_url, sync_url = _test_urls()

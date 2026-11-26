@@ -2,6 +2,10 @@ import type {
   AgentBubble,
   AgentResult,
   ApiErrorBody,
+  ChatRedirectFrame,
+  ChatErrorFrame,
+  ChatRequestPayload,
+  ChatStreamFrame,
   ConversationSummary,
   Coverage,
   CounterfactualEntry,
@@ -207,12 +211,20 @@ export interface HistoryMessage {
 export interface WorkspaceHistory {
   task: WorkspaceTaskResponse
   messages: HistoryMessage[]
+  session_id?: string | null
 }
 
 export interface WorkspaceConfirmBody {
   confirmed: boolean
   note?: string
   model: ModelSelection
+}
+
+export interface ChatStreamHandlers {
+  onMeta?: (sessionId: string) => void
+  onDelta?: (delta: string) => void
+  onDone?: (messageId: number) => void
+  onError?: (frame: ChatErrorFrame) => void
 }
 
 export const workspaceApi = {
@@ -226,6 +238,67 @@ export const workspaceApi = {
       files: payload.files,
       model: toBackendModel(payload.model),
     }),
+
+  chat: async (
+    payload: ChatRequestPayload,
+    handlers: ChatStreamHandlers = {},
+  ): Promise<ChatRedirectFrame | void> => {
+    const response = await fetch(`${BASE}/workspace/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        message: payload.message,
+        model: toBackendModel(payload.model),
+        session_id: payload.session_id || null,
+        files: (payload.files || []).map((file) => ({
+          name: file.name,
+          size: file.size,
+          content: file.content,
+        })),
+      }),
+    })
+    const contentType = response.headers.get('content-type') || ''
+    if (!response.ok) {
+      const body = await parseBody(response)
+      handleUnauthorized(response.status)
+      throw new ApiError(response.status, body as ApiErrorBody | null)
+    }
+    if (contentType.includes('application/json')) {
+      return (await parseBody(response)) as ChatRedirectFrame
+    }
+    if (!response.body) throw new Error('浏览器不支持流式响应')
+
+    const handleFrame = (frame: string): void => {
+      const line = frame.split('\n').find((item) => item.startsWith('data: '))
+      if (!line) return
+      try {
+        const event = JSON.parse(line.slice(6)) as ChatStreamFrame
+        if (event.type === 'meta') handlers.onMeta?.(event.session_id)
+        else if (event.type === 'delta') handlers.onDelta?.(event.delta)
+        else if (event.type === 'done') handlers.onDone?.(event.message_id)
+        else if (event.type === 'error') handlers.onError?.(event)
+      } catch {
+        // 忽略坏帧
+      }
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const frames = buffer.split('\n\n')
+      buffer = frames.pop() || ''
+      frames.forEach(handleFrame)
+    }
+    if (buffer.trim()) handleFrame(buffer)
+  },
 
   task: (taskId: string) => api.get<WorkspaceTaskResponse>(`/workspace/tasks/${taskId}`),
 

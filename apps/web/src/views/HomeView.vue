@@ -159,7 +159,7 @@ function filesOfMessage(message: { fileUids?: string[]; files?: UploadFileState[
               ? 'rounded-br-md bg-gradient-to-br from-brand to-brand-light text-white'
               : 'rounded-bl-md border border-white/80 bg-white/90 text-[#434c60]'"
           >
-            {{ message.text }}
+            {{ message.text }}<span v-if="message.streaming" class="typing-cursor" aria-hidden="true"></span>
           </div>
           </div>
         </template>

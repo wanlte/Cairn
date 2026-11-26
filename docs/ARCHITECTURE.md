@@ -44,6 +44,26 @@ ModelGateway.complete() → 能力矩阵/降级/限流/熔断/计量
 
 任务状态与事件落在 `workspace_tasks` / `workspace_task_events`：前者记录 QUEUED / RUNNING / WAITING_CONFIRM / DONE / FAILED，后者供 SSE 增量推送友好角色气泡；人工确认通过后由 confirm 接口恢复并聚合结果，不依赖进程内 checkpoint，天然支持重启与多进程。
 
+## 聊天直连链路（M18）
+
+纯聊天不进入上面的 LangGraph 图，也不做意图模型分类：
+
+```text
+前端无附件输入
+  ↓ POST /api/v1/workspace/chat（JWT）
+chat 规则分流（fallback_intent，零模型调用）
+  ├─ 画像修改 / 具体任务 / 有证据的复盘 → 前端转调 /workspace/tasks 完整链路
+  └─ 自由聊天 / 自我介绍 / 链接 / 无证据的复盘
+       ↓ 链接正文（SSRF 防护）+ 画像与相关碎片 + 最近 12 条会话消息
+  ModelGateway.complete_stream() → 共享限流器（令牌桶/并发/熔断）
+       ↓ meta → delta* → done/error 帧（text/event-stream）
+  chat_messages + workspace_tasks 历史壳落库
+```
+
+`ModelGateway.complete_stream()` 只走首个 provider：不做降级链、幂等与结构化解析；仅首字前允许退避重试，流末聚合一次 usage 与 latency 写计量。`prompts/chat/v1.txt` 是聊天系统提示词的唯一来源，原图节点也复用它，复盘/画像/改画像链路的业务语义保持不变。
+
+会话标识复用 `workspace_tasks.task_key`，消息正文存 `chat_messages(user_id, session_id, role, content, created_at)`。同一会话内继续上传材料时，材料经 `ingest_and_extract()` 写入当前任务的 `conversation_ids_json`，正文摘录与附件名进入本轮提示词，不会新建任务或历史条目。`build_history()` 发现任务已有聊天消息时改用消息表重建对话并回传 `session_id`；没有聊天消息的老任务仍按 `workspace_task_events` 回放，因此历史侧栏、置顶、归档与删除能力无需改动。
+
 ## 关键数据流
 
 1. **摄入**：原始文本/ZIP → `Collector` → `Normalizer` → `raw_conversations` + `turn_pairs`

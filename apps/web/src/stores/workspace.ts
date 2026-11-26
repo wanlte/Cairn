@@ -71,6 +71,7 @@ const state = reactive({
   stage: '等待中' as TaskStage,
   confirmPrompt: '',
   taskId: '' as string,
+  sessionId: '' as string,
   busy: false,
   notice: '',
   noticeKind: 'info' as 'info' | 'error' | 'success',
@@ -115,14 +116,16 @@ function pumpPlayback(): void {
   step()
 }
 
-function pushMessage(role: ConversationMessage['role'], text: string, extra: Partial<ConversationMessage> = {}): void {
+function pushMessage(role: ConversationMessage['role'], text: string, extra: Partial<ConversationMessage> = {}): string {
+  const id = uid()
   state.messages.push({
-    id: uid(),
+    id,
     role,
     text,
     createdAt: new Date().toISOString(),
     ...extra,
   })
+  return id
 }
 
 let noticeTimer: ReturnType<typeof setTimeout> | null = null
@@ -140,6 +143,53 @@ function notify(message: string, kind: 'info' | 'error' | 'success' = 'info'): v
 function resetModelTempKeyAfterTask(): void {
   if (state.model.credentialMode === '临时使用') {
     state.model.temporaryKey = null
+  }
+}
+
+async function runTask(text: string): Promise<void> {
+  state.busy = true
+  try {
+    const response = await workspaceApi.createTask({
+      message: text,
+      direction: state.direction,
+      customDirection: [
+        ...selectedPrompts.value.map((item) => item.text),
+        state.customDirection,
+      ]
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .join('\n'),
+      files: state.files.map((file) => ({
+        name: file.name,
+        size: file.size,
+        content: file.content || '',
+      })),
+      model: { ...state.model },
+    })
+    void metricsApi.track('task_started', { direction: state.direction })
+    state.files.splice(0)
+    state.direction = 'free'
+    state.customDirection = ''
+    state.selectedPromptIds.splice(0)
+    state.recommendReason = ''
+    activeStreamTask = response.task_id
+    confirmedTask = ''
+    state.taskId = response.task_id
+    state.sessionId = response.task_id
+    state.stage = friendlyStage(response.stage)
+    state.recommendReason = response.recommend_reason || state.recommendReason
+    workspaceApi.events(response.task_id, handleEvent).catch(() => {
+      state.messages = state.messages.filter((item) => item.kind !== 'working')
+    })
+    void workspaceApi.list().then((items) => { state.history = items }).catch(() => undefined)
+  } catch (err) {
+    state.messages = state.messages.filter((item) => item.kind !== 'working')
+    state.stage = '遇到问题'
+    notify(friendlyError(err), 'error')
+    pushMessage('助手', friendlyError(err))
+  } finally {
+    state.busy = false
+    resetModelTempKeyAfterTask()
   }
 }
 
@@ -309,50 +359,87 @@ export const workspace = {
     state.confirmPrompt = ''
     resetPlayback()
     pushMessage('用户', text || '帮我看看这些对话')
-    pushMessage('助手', workingText(), { kind: 'working' })
     state.input = ''
 
+    const hasFiles = state.files.length > 0
+    const currentSessionId = state.sessionId || state.taskId || undefined
+    if (hasFiles && !currentSessionId) {
+      pushMessage('助手', workingText(), { kind: 'working' })
+      await runTask(text)
+      return
+    }
+
+    const bubbleId = pushMessage(
+      '助手',
+      hasFiles ? '正在把新材料加入这个会话…' : '',
+      { kind: 'text', streaming: true },
+    )
+    let firstDelta = true
+    let streamError = ''
     try {
-      const response = await workspaceApi.createTask({
-        message: text,
-        direction: state.direction,
-        customDirection: [
-          ...selectedPrompts.value.map((item) => item.text),
-          state.customDirection,
-        ]
-          .map((item) => item.trim())
-          .filter(Boolean)
-          .join('\n'),
-        files: state.files.map((file) => ({
-          name: file.name,
-          size: file.size,
-          content: file.content || '',
-        })),
-        model: { ...state.model },
-      })
-      void metricsApi.track('task_started', { direction: state.direction })
+      const result = await workspaceApi.chat(
+        {
+          message: text,
+          model: { ...state.model },
+          session_id: currentSessionId,
+          files: hasFiles
+            ? state.files.map((file) => ({
+                name: file.name,
+                size: file.size,
+                content: file.content || '',
+              }))
+            : undefined,
+        },
+        {
+          onMeta: (sessionId) => {
+            state.sessionId = sessionId
+            state.taskId = sessionId
+          },
+          onDelta: (delta) => {
+            const message = state.messages.find((item) => item.id === bubbleId)
+            if (message) {
+              if (firstDelta && hasFiles) message.text = ''
+              firstDelta = false
+              message.text += delta
+            }
+          },
+          onDone: () => {
+            const message = state.messages.find((item) => item.id === bubbleId)
+            if (message) message.streaming = false
+          },
+          onError: (frame) => {
+            streamError = frame.message
+          },
+        },
+      )
+      if (result?.redirect) {
+        state.messages = state.messages.filter((item) => item.id !== bubbleId)
+        state.sessionId = ''
+        await runTask(text)
+        return
+      }
+      if (streamError) throw new Error(streamError)
+      const message = state.messages.find((item) => item.id === bubbleId)
+      if (message) message.streaming = false
       state.files.splice(0)
       state.direction = 'free'
       state.customDirection = ''
       state.selectedPromptIds.splice(0)
       state.recommendReason = ''
-      activeStreamTask = response.task_id
-      confirmedTask = ''
-      state.taskId = response.task_id
-      state.stage = friendlyStage(response.stage)
-      state.recommendReason = response.recommend_reason || state.recommendReason
-      workspaceApi.events(response.task_id, handleEvent).catch(() => {
-        state.messages = state.messages.filter((item) => item.kind !== 'working')
-      })
-      void workspaceApi.list().then((items) => { state.history = items }).catch(() => undefined)
+      state.stage = '已完成'
     } catch (err) {
+      const message = state.messages.find((item) => item.id === bubbleId)
+      if (message) {
+        message.streaming = false
+        if (!message.text) message.text = friendlyError(err)
+      }
       state.messages = state.messages.filter((item) => item.kind !== 'working')
       state.stage = '遇到问题'
       notify(friendlyError(err), 'error')
-      pushMessage('助手', friendlyError(err))
     } finally {
       state.busy = false
       resetModelTempKeyAfterTask()
+      void workspaceApi.list().then((items) => { state.history = items }).catch(() => undefined)
     }
   },
 
@@ -389,6 +476,7 @@ export const workspace = {
     state.confirmPrompt = ''
     state.stage = '等待中'
     state.taskId = ''
+    state.sessionId = ''
   },
 
   async loadHistory(limit = 50): Promise<void> {
@@ -434,6 +522,7 @@ export const workspace = {
     state.history = state.history.filter((item) => item.task_id !== taskId)
     if (state.taskId === taskId) {
       state.taskId = ''
+      state.sessionId = ''
     }
     return result
   },
@@ -506,6 +595,7 @@ export const workspace = {
         }
       }
       state.taskId = data.task.task_id
+      state.sessionId = data.session_id || ''
       state.result = normalizeAgentResult(data.task.result) || null
       state.stage = friendlyStage(data.task.stage)
       state.confirmPrompt = data.task.confirm_prompt || ''

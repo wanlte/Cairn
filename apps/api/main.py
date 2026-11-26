@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.analysis.router import router as analysis_router
 from apps.api.auth.router import router as auth_router
+from apps.api.chat.router import router as chat_router
 from apps.api.config import get_settings
 from apps.api.credentials.router import router as credentials_router
 from apps.api.errors import register_error_handlers
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(evaluation_router)
     app.include_router(usage_router)
     app.include_router(workspace_router)
+    app.include_router(chat_router)
     app.include_router(platform_router)
     app.include_router(samples_router)
     app.include_router(timeline_router)

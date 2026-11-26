@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
@@ -14,6 +15,7 @@ from apps.api.gateway.schemas import (
     ProviderCapabilities,
     ProviderName,
     ResponseFormat,
+    StreamChunk,
     ThinkingMode,
     TokenUsage,
     ToolSupport,
@@ -36,6 +38,16 @@ class BaseProvider(ABC):
     @abstractmethod
     def normalize_error(self, exc: Exception) -> UnifiedError:
         raise NotImplementedError
+
+    async def complete_stream(
+        self, request: GatewayRequest
+    ) -> AsyncIterator[StreamChunk]:
+        raise UnifiedError(
+            GatewayErrorCode.SERVER_ERROR,
+            f"{self.name.value} 不支持流式输出",
+            retryable=False,
+        )
+        yield StreamChunk()  # 使其成为 async generator，异常在迭代时抛出
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         raise UnifiedError(
@@ -198,6 +210,50 @@ class OpenAICompatProvider(BaseProvider):
             latency_ms=int((time.perf_counter() - started) * 1000),
             raw_response_snippet=redact_snippet(content),
         )
+
+    async def complete_stream(self, request: GatewayRequest) -> AsyncIterator[StreamChunk]:
+        """逐 chunk 产出增量文本，最后一个 chunk 携带 usage。
+
+        仅产出正文增量；reasoning/thinking 增量（混元等推理模型）不进入正文。
+        个别 OpenAI 兼容端点不支持 stream_options，遇到 400 时去掉该参数重试
+        （此时拿不到 usage，计量记 0）。
+        """
+        kwargs = self._build_kwargs(request)
+        kwargs["stream"] = True
+        kwargs["stream_options"] = {"include_usage": True}
+        try:
+            stream = await self._create_stream(kwargs)
+            async for chunk in stream:
+                choices = getattr(chunk, "choices", None) or []
+                if choices:
+                    delta = getattr(choices[0], "delta", None)
+                    content = getattr(delta, "content", None) if delta is not None else None
+                    if content:
+                        if isinstance(content, list):
+                            content = "".join(
+                                str(getattr(part, "text", part)) for part in content
+                            )
+                        yield StreamChunk(delta=content)
+                usage = getattr(chunk, "usage", None)
+                if usage is not None and not choices:
+                    yield StreamChunk(
+                        usage=TokenUsage(
+                            prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                            completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                        )
+                    )
+        except Exception as exc:
+            raise self.normalize_error(exc) from exc
+
+    async def _create_stream(self, kwargs: dict):
+        try:
+            return await self._client.chat.completions.create(**kwargs)
+        except APIStatusError as exc:
+            message = str(exc).lower()
+            if getattr(exc, "status_code", None) == 400 and "stream_option" in message:
+                kwargs.pop("stream_options", None)
+                return await self._client.chat.completions.create(**kwargs)
+            raise
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
